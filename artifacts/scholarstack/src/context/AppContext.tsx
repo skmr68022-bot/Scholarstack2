@@ -1,11 +1,34 @@
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 
 type Role = "student" | "scholar" | "admin" | null;
+
+export interface RegisteredUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  role: "student" | "scholar";
+  expertise?: string;
+  createdAt: number;
+}
+
+export interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "student" | "scholar" | "admin";
+}
 
 interface AppContextType {
   role: Role;
   setRole: (r: Role) => void;
+  currentUser: CurrentUser | null;
+  login: (email: string, password: string, role: "student" | "scholar" | "admin") => { success: boolean; error?: string };
+  signup: (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }) => { success: boolean; error?: string };
+  loginWithPhone: (phone: string, role: "student" | "scholar") => { success: boolean; user?: RegisteredUser; error?: string };
+  logout: () => void;
   purchased: Set<number>;
   addPurchased: (id: number) => void;
   bookmarked: Set<number>;
@@ -46,10 +69,46 @@ export interface AdminUser {
   status: string;
 }
 
+const ADMIN_EMAIL = "admin@scholarstack.in";
+const ADMIN_PASSWORD = "ScholarAdmin@2024";
+const USERS_KEY = "ss_registered_users";
+const SESSION_KEY = "ss_current_user";
+
+function loadUsers(): RegisteredUser[] {
+  try {
+    const raw = localStorage.getItem(USERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUsers(users: RegisteredUser[]) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function loadSession(): CurrentUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(user: CurrentUser | null) {
+  if (user) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(SESSION_KEY);
+  }
+}
+
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => loadSession());
   const [purchased, setPurchased] = useState<Set<number>>(new Set());
   const [bookmarked, setBookmarked] = useState<Set<number>>(new Set());
   const [uploads, setUploads] = useState<UploadItem[]>([
@@ -69,6 +128,112 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     { id:4, name:"Spam User", email:"spam@test.com", role:"Student", plan:"Free", status:"flagged" },
   ]);
 
+  useEffect(() => {
+    if (currentUser) {
+      setRole(currentUser.role);
+    }
+  }, []);
+
+  const login = (email: string, password: string, loginRole: "student" | "scholar" | "admin"): { success: boolean; error?: string } => {
+    const trimEmail = email.trim().toLowerCase();
+    const trimPw = password.trim();
+
+    if (!trimEmail || !trimPw) {
+      return { success: false, error: "Please fill in all fields." };
+    }
+
+    if (loginRole === "admin") {
+      if (trimEmail === ADMIN_EMAIL.toLowerCase() && trimPw === ADMIN_PASSWORD) {
+        const user: CurrentUser = { id: "admin-1", name: "Admin", email: ADMIN_EMAIL, role: "admin" };
+        setCurrentUser(user);
+        saveSession(user);
+        setRole("admin");
+        return { success: true };
+      }
+      return { success: false, error: "Invalid admin credentials." };
+    }
+
+    const registeredUsers = loadUsers();
+    const found = registeredUsers.find(
+      u => u.email.toLowerCase() === trimEmail && u.password === trimPw && u.role === loginRole
+    );
+
+    if (!found) {
+      const emailExists = registeredUsers.find(u => u.email.toLowerCase() === trimEmail);
+      if (emailExists) {
+        return { success: false, error: "Incorrect password." };
+      }
+      return { success: false, error: "No account found with this email. Please sign up." };
+    }
+
+    const user: CurrentUser = { id: found.id, name: found.name, email: found.email, role: found.role };
+    setCurrentUser(user);
+    saveSession(user);
+    setRole(found.role);
+    return { success: true };
+  };
+
+  const signup = (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }): { success: boolean; error?: string } => {
+    const trimEmail = data.email.trim().toLowerCase();
+    const trimName = data.name.trim();
+    const trimPw = data.password.trim();
+
+    if (!trimName || !trimEmail || !trimPw) {
+      return { success: false, error: "Please fill in all required fields." };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimEmail)) {
+      return { success: false, error: "Please enter a valid email address." };
+    }
+    if (trimPw.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters." };
+    }
+
+    const registeredUsers = loadUsers();
+    if (registeredUsers.find(u => u.email.toLowerCase() === trimEmail)) {
+      return { success: false, error: "An account with this email already exists. Please sign in." };
+    }
+
+    const newUser: RegisteredUser = {
+      id: `user-${Date.now()}`,
+      name: trimName,
+      email: trimEmail,
+      password: trimPw,
+      phone: data.phone,
+      role: data.role,
+      expertise: data.expertise,
+      createdAt: Date.now(),
+    };
+
+    const updated = [...registeredUsers, newUser];
+    saveUsers(updated);
+
+    const user: CurrentUser = { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role };
+    setCurrentUser(user);
+    saveSession(user);
+    setRole(newUser.role);
+    return { success: true };
+  };
+
+  const loginWithPhone = (phone: string, loginRole: "student" | "scholar"): { success: boolean; user?: RegisteredUser; error?: string } => {
+    const trimPhone = phone.trim().replace(/\s/g, "");
+    if (trimPhone.length !== 10 || !/^\d{10}$/.test(trimPhone)) {
+      return { success: false, error: "Please enter a valid 10-digit mobile number." };
+    }
+
+    const registeredUsers = loadUsers();
+    const found = registeredUsers.find(u => u.phone === trimPhone && u.role === loginRole);
+    if (!found) {
+      return { success: false, error: "No account found with this phone number. Please sign up via email first." };
+    }
+    return { success: true, user: found };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setRole(null);
+    saveSession(null);
+  };
+
   const addPurchased = (id: number) => setPurchased(prev => new Set([...prev, id]));
   const toggleBookmark = (id: number) => setBookmarked(prev => {
     const ns = new Set(prev);
@@ -80,7 +245,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const banUser = (id: number) => setUsers(prev => prev.map(u => u.id === id ? {...u, status:"banned"} : u));
 
   return (
-    <AppContext.Provider value={{ role, setRole, purchased, addPurchased, bookmarked, toggleBookmark, uploads, addUpload, pendingScholars, removeScholar, users, banUser }}>
+    <AppContext.Provider value={{ role, setRole, currentUser, login, signup, loginWithPhone, logout, purchased, addPurchased, bookmarked, toggleBookmark, uploads, addUpload, pendingScholars, removeScholar, users, banUser }}>
       {children}
     </AppContext.Provider>
   );

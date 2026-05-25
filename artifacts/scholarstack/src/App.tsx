@@ -1,8 +1,8 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AppProvider } from "./context/AppContext";
+import { AppProvider, useApp } from "./context/AppContext";
 import NotFound from "@/pages/not-found";
 
 import Splash from "./pages/Splash";
@@ -29,36 +29,63 @@ import Analytics from "./pages/scholar/Analytics";
 
 const queryClient = new QueryClient();
 
+function RequireAuth({ children, requiredRole }: { children: React.ReactNode; requiredRole: "student" | "scholar" | "admin" }) {
+  const { currentUser } = useApp();
+  const [, setLocation] = useLocation();
+
+  if (!currentUser) {
+    setLocation(`/auth/${requiredRole}`);
+    return null;
+  }
+  if (currentUser.role !== requiredRole) {
+    setLocation(`/auth/${requiredRole}`);
+    return null;
+  }
+  return <>{children}</>;
+}
+
 function StudentRoutes() {
   return (
-    <StudentLayout>
-      <Switch>
-        <Route path="/student" component={StudentHome} />
-        <Route path="/student/notes" component={Notes} />
-        <Route path="/student/notes/:id" component={NoteDetail} />
-        <Route path="/student/reels" component={Reels} />
-        <Route path="/student/library" component={Library} />
-        <Route path="/student/ai" component={AiTutor} />
-        <Route path="/student/orders" component={Orders} />
-        <Route path="/student/profile" component={Profile} />
-        <Route component={NotFound} />
-      </Switch>
-    </StudentLayout>
+    <RequireAuth requiredRole="student">
+      <StudentLayout>
+        <Switch>
+          <Route path="/student" component={StudentHome} />
+          <Route path="/student/notes" component={Notes} />
+          <Route path="/student/notes/:id" component={NoteDetail} />
+          <Route path="/student/reels" component={Reels} />
+          <Route path="/student/library" component={Library} />
+          <Route path="/student/ai" component={AiTutor} />
+          <Route path="/student/orders" component={Orders} />
+          <Route path="/student/profile" component={Profile} />
+          <Route component={NotFound} />
+        </Switch>
+      </StudentLayout>
+    </RequireAuth>
   );
 }
 
 function ScholarRoutes() {
   return (
-    <ScholarLayout>
-      <Switch>
-        <Route path="/scholar" component={ScholarOverview} />
-        <Route path="/scholar/upload" component={Upload} />
-        <Route path="/scholar/content" component={Content} />
-        <Route path="/scholar/earnings" component={Earnings} />
-        <Route path="/scholar/analytics" component={Analytics} />
-        <Route component={NotFound} />
-      </Switch>
-    </ScholarLayout>
+    <RequireAuth requiredRole="scholar">
+      <ScholarLayout>
+        <Switch>
+          <Route path="/scholar" component={ScholarOverview} />
+          <Route path="/scholar/upload" component={Upload} />
+          <Route path="/scholar/content" component={Content} />
+          <Route path="/scholar/earnings" component={Earnings} />
+          <Route path="/scholar/analytics" component={Analytics} />
+          <Route component={NotFound} />
+        </Switch>
+      </ScholarLayout>
+    </RequireAuth>
+  );
+}
+
+function AdminRoute() {
+  return (
+    <RequireAuth requiredRole="admin">
+      <Admin />
+    </RequireAuth>
   );
 }
 
@@ -68,7 +95,7 @@ function Router() {
       <Route path="/" component={Splash} />
       <Route path="/role" component={RoleSelect} />
       <Route path="/auth/:role" component={Auth} />
-      <Route path="/admin" component={Admin} />
+      <Route path="/admin" component={AdminRoute} />
       <Route path="/student/:rest*" component={StudentRoutes} />
       <Route path="/student" component={StudentRoutes} />
       <Route path="/scholar/:rest*" component={ScholarRoutes} />
