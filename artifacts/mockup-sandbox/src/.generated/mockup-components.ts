@@ -6,6 +6,7 @@ export const modules: ModuleMap = {
   "./components/mockups/scholarstack/LandingPage.tsx": () => import("../components/mockups/scholarstack/LandingPage.tsx"),
   "./components/mockups/scholarstack/NotesPage.tsx": () => import("../components/mockups/scholarstack/NotesPage.tsx"),
   "./components/mockups/scholarstack/ScholarDashboard.tsx": () => import("../components/mockups/scholarstack/ScholarDashboard.tsx"),
+  "./components/mockups/scholarstack/ScholarStackApp.tsx": () => import("../components/mockups/scholarstack/ScholarStackApp.tsx"),
   "./components/mockups/scholarstack/StudentDashboard.tsx": () => import("../components/mockups/scholarstack/StudentDashboard.tsx"),
   "./components/mockups/scholarstack/VideoReels.tsx": () => import("../components/mockups/scholarstack/VideoReels.tsx")
 };
