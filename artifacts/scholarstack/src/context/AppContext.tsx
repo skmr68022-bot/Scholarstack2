@@ -52,6 +52,8 @@ export interface UploadItem {
   earnings: string;
   rating: number;
   status: string;
+  category?: string;
+  exam?: string;
 }
 
 export interface PendingScholar {
