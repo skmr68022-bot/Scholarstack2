@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import { useApp } from "../context/AppContext";
 
 type AuthMode = "login" | "signup";
-type Tab = "email" | "phone" | "google";
+type Tab = "email" | "phone";
 type Step = "form" | "otp";
 type OtpPurpose = "email-signup" | "phone-signup" | "phone-login";
 
@@ -191,12 +191,19 @@ export default function Auth() {
     setOtpError("");
   };
 
-  const switchMode = (m: AuthMode) => {
+  const switchEmailMode = (m: AuthMode) => {
     setMode(m);
     setError("");
-    setStep("form");
-    setOtpInput("");
+    setName("");
+    setEmail("");
+    setPw("");
+    setExpertise("");
+    setAgreed(false);
   };
+
+  const otpSentTo = pendingPhone
+    ? `+91 ${pendingPhone}`
+    : pendingSignupData?.email ?? "";
 
   return (
     <div className="min-h-screen flex bg-[#070709]">
@@ -233,7 +240,7 @@ export default function Auth() {
       <div className="flex-1 flex flex-col items-center justify-center px-8 overflow-y-auto py-10">
         <div className="w-full max-w-sm">
 
-          {/* OTP Verification Step */}
+          {/* ── OTP Verification Step ── */}
           {step === "otp" && (
             <div>
               <button onClick={resetForm} className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition mb-6">
@@ -243,11 +250,8 @@ export default function Auth() {
                 {pendingPhone ? "📱" : "📧"}
               </div>
               <h2 className="text-2xl font-black text-white mb-1">Verify OTP</h2>
-              <p className="text-sm text-gray-400 mb-2">
-                OTP sent to {pendingPhone ? `+91 ${pendingPhone}` : pendingSignupData?.email}
-              </p>
+              <p className="text-sm text-gray-400 mb-2">OTP sent to {otpSentTo}</p>
 
-              {/* OTP Display Box — shown since this is a demo without a real email/SMS service */}
               <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
                 <p className="text-xs text-amber-400 font-semibold mb-1">Demo Mode — Your OTP</p>
                 <p className="text-3xl font-black text-amber-300 tracking-[0.35em]">{generatedOtp}</p>
@@ -275,63 +279,152 @@ export default function Auth() {
                     ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Verifying…</span>
                     : "Verify & Continue →"}
                 </button>
-                <button onClick={() => {
-                  const newOtp = generateOTP();
-                  setGeneratedOtp(newOtp);
-                  setOtpInput("");
-                  setOtpError("");
-                }} className={`text-xs ${accentText} text-center w-full hover:underline`}>
+                <button
+                  onClick={() => { const o = generateOTP(); setGeneratedOtp(o); setOtpInput(""); setOtpError(""); }}
+                  className={`text-xs ${accentText} text-center w-full hover:underline`}
+                >
                   Resend OTP
                 </button>
               </div>
             </div>
           )}
 
-          {/* Main Form Step */}
+          {/* ── Main Form Step ── */}
           {step === "form" && (
             <>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-5">
                 <span>{icon}</span>
                 <span className={`text-xs font-semibold ${accentText}`}>{roleLabel}</span>
               </div>
-              <h2 className="text-2xl font-black text-white mb-1">{mode === "login" ? "Welcome back!" : `Join as ${roleLabel}`}</h2>
-              <p className="text-sm text-gray-400 mb-6">{mode === "login" ? "Sign in to your account" : "Create your free account"}</p>
+              <h2 className="text-2xl font-black text-white mb-1">
+                {isAdmin ? "Admin Login" : tab === "email" ? (mode === "signup" ? `Join as ${roleLabel}` : "Welcome back!") : (phoneMode === "signup" ? `Join as ${roleLabel}` : "Welcome back!")}
+              </h2>
+              <p className="text-sm text-gray-400 mb-6">
+                {isAdmin ? "Enter your admin credentials" : tab === "email" ? (mode === "signup" ? "Create your free account" : "Sign in to your account") : (phoneMode === "signup" ? "Create your free account" : "Sign in to your account")}
+              </p>
 
-              {/* Tabs */}
+              {/* Method tabs (Email / OTP) — not shown for admin */}
               {!isAdmin && (
                 <div className="flex gap-1 mb-5 bg-white/5 rounded-xl p-1 border border-white/10">
-                  {(["email", "phone", "google"] as Tab[]).map(t => (
+                  {(["email", "phone"] as Tab[]).map(t => (
                     <button
                       key={t}
                       onClick={() => { setTab(t); setError(""); }}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${tab === t ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}
                     >
-                      {t === "google" ? "Google" : t === "phone" ? "OTP" : "Email"}
+                      {t === "phone" ? "Mobile OTP" : "Email"}
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* Google tab */}
-              {tab === "google" && !isAdmin && (
+              {/* ── Email tab ── */}
+              {(tab === "email" || isAdmin) && (
                 <div className="space-y-4">
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center">
-                    <p className="text-xs text-gray-400">Google Sign-in requires a backend integration.</p>
-                    <p className="text-xs text-gray-500 mt-1">Please use Email or OTP login instead.</p>
+                  {/* New Account / Sign In toggle */}
+                  {!isAdmin && (
+                    <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+                      {(["signup", "login"] as AuthMode[]).map(m => (
+                        <button
+                          key={m}
+                          onClick={() => switchEmailMode(m)}
+                          className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${mode === m ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}
+                        >
+                          {m === "signup" ? "New Account" : "Sign In"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {mode === "signup" && !isAdmin && (
+                    <div>
+                      <label className="text-xs text-gray-400 font-semibold block mb-2">Full Name</label>
+                      <input
+                        value={name}
+                        onChange={e => { setName(e.target.value); setError(""); }}
+                        placeholder="Your full name"
+                        className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-xs text-gray-400 font-semibold block mb-2">Email</label>
+                    <input
+                      value={email}
+                      onChange={e => { setEmail(e.target.value); setError(""); }}
+                      placeholder="you@email.com"
+                      type="email"
+                      className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
+                    />
                   </div>
+
+                  <div>
+                    <label className="text-xs text-gray-400 font-semibold block mb-2">Password</label>
+                    <div className="relative">
+                      <input
+                        value={pw}
+                        onChange={e => { setPw(e.target.value); setError(""); }}
+                        placeholder={mode === "signup" ? "Min 8 characters" : "Your password"}
+                        type={showPw ? "text" : "password"}
+                        className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
+                      />
+                      <button onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs">
+                        {showPw ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {mode === "signup" && isScholar && !isAdmin && (
+                    <div>
+                      <label className="text-xs text-gray-400 font-semibold block mb-2">Expertise Area</label>
+                      <select
+                        value={expertise}
+                        onChange={e => setExpertise(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-300 outline-none focus:border-cyan-500 transition cursor-pointer"
+                      >
+                        <option value="" className="bg-gray-900">Select your expertise</option>
+                        {["UPSC Civil Services","NEET Medical","JEE Engineering","CAT/MBA","SSC Exams","GATE","Banking","Other"].map(o => (
+                          <option key={o} value={o} className="bg-gray-900">{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {mode === "signup" && !isAdmin && (
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agreed}
+                        onChange={e => { setAgreed(e.target.checked); setError(""); }}
+                        className="mt-0.5 accent-violet-500"
+                      />
+                      <span className="text-xs text-gray-400">I agree to the <span className={accentText}>Terms & Privacy Policy</span></span>
+                    </label>
+                  )}
+
+                  {error && (
+                    <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                      {error}
+                    </div>
+                  )}
+
                   <button
-                    onClick={() => setTab("email")}
-                    className={`w-full py-3 rounded-2xl bg-gradient-to-r ${accent} text-white font-semibold text-sm hover:opacity-90 transition`}
+                    onClick={handleEmailSubmit}
+                    disabled={loading}
+                    className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg ${loading ? "opacity-70" : "hover:scale-[1.01]"}`}
                   >
-                    Use Email Instead
+                    {loading
+                      ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Authenticating…</span>
+                      : mode === "login" || isAdmin ? "Sign In →" : `Create ${roleLabel} Account →`}
                   </button>
                 </div>
               )}
 
-              {/* Phone OTP tab */}
+              {/* ── Phone OTP tab ── */}
               {tab === "phone" && !isAdmin && (
                 <div className="space-y-4">
-                  {/* Sign up / Sign in toggle for phone */}
+                  {/* New Account / Sign In toggle */}
                   <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
                     {(["signup", "login"] as AuthMode[]).map(m => (
                       <button
@@ -386,76 +479,7 @@ export default function Auth() {
                     </div>
                   )}
 
-                  {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
-
-                  <button
-                    onClick={handlePhoneSend}
-                    disabled={phone.length !== 10 || (phoneMode === "signup" && !phoneName.trim())}
-                    className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition disabled:opacity-50`}
-                  >
-                    {phoneMode === "signup" ? "Send OTP to Sign Up" : "Send OTP to Sign In"}
-                  </button>
-                </div>
-              )}
-
-              {/* Email / Admin form */}
-              {(tab === "email" || isAdmin) && (
-                <div className="space-y-4">
-                  {mode === "signup" && !isAdmin && (
-                    <div>
-                      <label className="text-xs text-gray-400 font-semibold block mb-2">Full Name</label>
-                      <input
-                        value={name}
-                        onChange={e => { setName(e.target.value); setError(""); }}
-                        placeholder="Your full name"
-                        className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-xs text-gray-400 font-semibold block mb-2">Email</label>
-                    <input
-                      value={email}
-                      onChange={e => { setEmail(e.target.value); setError(""); }}
-                      placeholder="you@email.com"
-                      type="email"
-                      className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
-                    />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <label className="text-xs text-gray-400 font-semibold">Password</label>
-                      {mode === "login" && <span className={`text-xs ${accentText}`}>Min 8 characters</span>}
-                    </div>
-                    <div className="relative">
-                      <input
-                        value={pw}
-                        onChange={e => { setPw(e.target.value); setError(""); }}
-                        placeholder={mode === "signup" ? "Min 8 characters" : "Your password"}
-                        type={showPw ? "text" : "password"}
-                        className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
-                      />
-                      <button onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs">
-                        {showPw ? "Hide" : "Show"}
-                      </button>
-                    </div>
-                  </div>
-                  {mode === "signup" && isScholar && (
-                    <div>
-                      <label className="text-xs text-gray-400 font-semibold block mb-2">Expertise Area</label>
-                      <select
-                        value={expertise}
-                        onChange={e => setExpertise(e.target.value)}
-                        className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-300 outline-none focus:border-cyan-500 transition cursor-pointer`}
-                      >
-                        <option value="" className="bg-gray-900">Select your expertise</option>
-                        {["UPSC Civil Services","NEET Medical","JEE Engineering","CAT/MBA","SSC Exams","GATE","Banking","Other"].map(o => (
-                          <option key={o} value={o} className="bg-gray-900">{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {mode === "signup" && !isAdmin && (
+                  {phoneMode === "signup" && (
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -467,40 +491,16 @@ export default function Auth() {
                     </label>
                   )}
 
-                  {error && (
-                    <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
-                      {error}
-                    </div>
-                  )}
+                  {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
 
                   <button
-                    onClick={handleEmailSubmit}
-                    disabled={loading}
-                    className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg ${loading ? "opacity-70" : "hover:scale-[1.01]"}`}
+                    onClick={handlePhoneSend}
+                    disabled={phone.length !== 10 || (phoneMode === "signup" && (!phoneName.trim() || !agreed))}
+                    className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg disabled:opacity-50`}
                   >
-                    {loading
-                      ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Authenticating…</span>
-                      : mode === "login" ? "Sign In →" : `Create ${roleLabel} Account →`}
+                    {phoneMode === "signup" ? `Create ${roleLabel} Account →` : "Send OTP to Sign In →"}
                   </button>
-
-                  {!isAdmin && (
-                    <>
-                      <div className="flex items-center gap-3"><div className="flex-1 h-px bg-white/10" /><span className="text-xs text-gray-500">or</span><div className="flex-1 h-px bg-white/10" /></div>
-                      <button onClick={() => { setTab("google"); setError(""); }} className="w-full py-3 rounded-2xl border border-white/10 text-sm text-gray-300 hover:bg-white/5 transition">
-                        Continue with Google
-                      </button>
-                    </>
-                  )}
                 </div>
-              )}
-
-              {!isAdmin && (
-                <p className="mt-5 text-center text-sm text-gray-400">
-                  {mode === "login" ? "No account? " : "Have an account? "}
-                  <button onClick={() => switchMode(mode === "login" ? "signup" : "login")} className={`${accentText} font-semibold hover:underline`}>
-                    {mode === "login" ? "Sign up free" : "Sign in"}
-                  </button>
-                </p>
               )}
             </>
           )}
