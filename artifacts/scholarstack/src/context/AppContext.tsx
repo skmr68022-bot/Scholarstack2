@@ -27,7 +27,9 @@ interface AppContextType {
   currentUser: CurrentUser | null;
   login: (email: string, password: string, role: "student" | "scholar" | "admin") => { success: boolean; error?: string };
   signup: (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }) => { success: boolean; error?: string };
+  signupWithPhone: (data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }) => { success: boolean; error?: string };
   loginWithPhone: (phone: string, role: "student" | "scholar") => { success: boolean; user?: RegisteredUser; error?: string };
+  completePhoneLogin: (phone: string, role: "student" | "scholar") => { success: boolean; error?: string };
   logout: () => void;
   purchased: Set<number>;
   addPurchased: (id: number) => void;
@@ -223,9 +225,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const registeredUsers = loadUsers();
     const found = registeredUsers.find(u => u.phone === trimPhone && u.role === loginRole);
     if (!found) {
-      return { success: false, error: "No account found with this phone number. Please sign up via email first." };
+      return { success: false, error: "No account found with this number. Please sign up first." };
     }
     return { success: true, user: found };
+  };
+
+  const completePhoneLogin = (phone: string, loginRole: "student" | "scholar"): { success: boolean; error?: string } => {
+    const registeredUsers = loadUsers();
+    const found = registeredUsers.find(u => u.phone === phone && u.role === loginRole);
+    if (!found) return { success: false, error: "Account not found." };
+    const user: CurrentUser = { id: found.id, name: found.name, email: found.phone!, role: found.role };
+    setCurrentUser(user);
+    saveSession(user);
+    setRole(found.role);
+    return { success: true };
+  };
+
+  const signupWithPhone = (data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }): { success: boolean; error?: string } => {
+    const trimPhone = data.phone.trim().replace(/\s/g, "");
+    const trimName = data.name.trim();
+
+    if (!trimName) return { success: false, error: "Please enter your full name." };
+    if (!/^\d{10}$/.test(trimPhone)) return { success: false, error: "Please enter a valid 10-digit mobile number." };
+
+    const registeredUsers = loadUsers();
+    if (registeredUsers.find(u => u.phone === trimPhone && u.role === data.role)) {
+      return { success: false, error: "An account with this number already exists. Please sign in." };
+    }
+
+    const newUser: RegisteredUser = {
+      id: `user-${Date.now()}`,
+      name: trimName,
+      email: `phone_${trimPhone}@scholarstack.local`,
+      password: "",
+      phone: trimPhone,
+      role: data.role,
+      expertise: data.expertise,
+      createdAt: Date.now(),
+    };
+
+    saveUsers([...registeredUsers, newUser]);
+    const user: CurrentUser = { id: newUser.id, name: newUser.name, email: newUser.phone!, role: newUser.role };
+    setCurrentUser(user);
+    saveSession(user);
+    setRole(newUser.role);
+    return { success: true };
   };
 
   const logout = () => {
@@ -245,7 +289,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const banUser = (id: number) => setUsers(prev => prev.map(u => u.id === id ? {...u, status:"banned"} : u));
 
   return (
-    <AppContext.Provider value={{ role, setRole, currentUser, login, signup, loginWithPhone, logout, purchased, addPurchased, bookmarked, toggleBookmark, uploads, addUpload, pendingScholars, removeScholar, users, banUser }}>
+    <AppContext.Provider value={{ role, setRole, currentUser, login, signup, signupWithPhone, loginWithPhone, completePhoneLogin, logout, purchased, addPurchased, bookmarked, toggleBookmark, uploads, addUpload, pendingScholars, removeScholar, users, banUser }}>
       {children}
     </AppContext.Provider>
   );

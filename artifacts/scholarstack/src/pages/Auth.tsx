@@ -5,7 +5,8 @@ import { useApp } from "../context/AppContext";
 
 type AuthMode = "login" | "signup";
 type Tab = "email" | "phone" | "google";
-type Step = "form" | "otp" | "success";
+type Step = "form" | "otp";
+type OtpPurpose = "email-signup" | "phone-signup" | "phone-login";
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -14,16 +15,20 @@ function generateOTP(): string {
 export default function Auth() {
   const { role } = useParams<{ role: string }>();
   const [, setLocation] = useLocation();
-  const { login, signup, loginWithPhone } = useApp();
+  const { login, signup, signupWithPhone, loginWithPhone, completePhoneLogin } = useApp();
 
   const [mode, setMode] = useState<AuthMode>("signup");
+  const [phoneMode, setPhoneMode] = useState<AuthMode>("signup");
   const [tab, setTab] = useState<Tab>("email");
   const [step, setStep] = useState<Step>("form");
+  const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>("email-signup");
 
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneName, setPhoneName] = useState("");
+  const [phoneExpertise, setPhoneExpertise] = useState("");
   const [expertise, setExpertise] = useState("");
   const [agreed, setAgreed] = useState(false);
 
@@ -34,6 +39,9 @@ export default function Auth() {
     role: "student" | "scholar"; expertise?: string;
   } | null>(null);
   const [pendingPhone, setPendingPhone] = useState("");
+  const [pendingPhoneSignupData, setPendingPhoneSignupData] = useState<{
+    name: string; phone: string; role: "student" | "scholar"; expertise?: string;
+  } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -87,6 +95,7 @@ export default function Auth() {
         role: isScholar ? "scholar" : "student",
         expertise: expertise || undefined,
       });
+      setOtpPurpose("email-signup");
       setStep("otp");
     }
   };
@@ -100,7 +109,7 @@ export default function Auth() {
 
     setLoading(true);
     setTimeout(() => {
-      if (pendingSignupData) {
+      if (otpPurpose === "email-signup" && pendingSignupData) {
         const result = signup(pendingSignupData);
         setLoading(false);
         if (result.success) {
@@ -109,13 +118,20 @@ export default function Auth() {
           setStep("form");
           setError(result.error || "Signup failed.");
         }
-      } else if (pendingPhone) {
-        const loginRole = isScholar ? "scholar" : "student";
-        const result = loginWithPhone(pendingPhone, loginRole);
+      } else if (otpPurpose === "phone-signup" && pendingPhoneSignupData) {
+        const result = signupWithPhone(pendingPhoneSignupData);
         setLoading(false);
-        if (result.success && result.user) {
-          const { login: loginFn } = { login };
-          loginFn(result.user.email, result.user.password, loginRole);
+        if (result.success) {
+          redirectAfterAuth();
+        } else {
+          setStep("form");
+          setError(result.error || "Signup failed.");
+        }
+      } else if (otpPurpose === "phone-login" && pendingPhone) {
+        const loginRole = isScholar ? "scholar" : "student";
+        const result = completePhoneLogin(pendingPhone, loginRole);
+        setLoading(false);
+        if (result.success) {
           redirectAfterAuth();
         } else {
           setStep("form");
@@ -128,22 +144,40 @@ export default function Auth() {
   const handlePhoneSend = () => {
     setError("");
     const trimPhone = phone.trim().replace(/\s/g, "");
+    const loginRole = isScholar ? "scholar" : "student";
+
     if (!/^\d{10}$/.test(trimPhone)) {
       setError("Please enter a valid 10-digit mobile number.");
       return;
     }
 
-    const loginRole = isScholar ? "scholar" : "student";
-    const check = loginWithPhone(trimPhone, loginRole);
-    if (!check.success) {
-      setError(check.error || "Phone number not found.");
-      return;
+    if (phoneMode === "signup") {
+      if (!phoneName.trim()) {
+        setError("Please enter your full name.");
+        return;
+      }
+      const registeredUsers: { phone?: string; role: string }[] = JSON.parse(localStorage.getItem("ss_registered_users") || "[]");
+      if (registeredUsers.find(u => u.phone === trimPhone && u.role === loginRole)) {
+        setError("An account with this number already exists. Please sign in.");
+        return;
+      }
+      const otp = generateOTP();
+      setGeneratedOtp(otp);
+      setPendingPhoneSignupData({ name: phoneName.trim(), phone: trimPhone, role: loginRole, expertise: phoneExpertise || undefined });
+      setOtpPurpose("phone-signup");
+      setStep("otp");
+    } else {
+      const check = loginWithPhone(trimPhone, loginRole);
+      if (!check.success) {
+        setError(check.error || "No account found. Please sign up first.");
+        return;
+      }
+      const otp = generateOTP();
+      setGeneratedOtp(otp);
+      setPendingPhone(trimPhone);
+      setOtpPurpose("phone-login");
+      setStep("otp");
     }
-
-    const otp = generateOTP();
-    setGeneratedOtp(otp);
-    setPendingPhone(trimPhone);
-    setStep("otp");
   };
 
   const resetForm = () => {
@@ -152,6 +186,7 @@ export default function Auth() {
     setGeneratedOtp("");
     setPendingSignupData(null);
     setPendingPhone("");
+    setPendingPhoneSignupData(null);
     setError("");
     setOtpError("");
   };
@@ -296,6 +331,31 @@ export default function Auth() {
               {/* Phone OTP tab */}
               {tab === "phone" && !isAdmin && (
                 <div className="space-y-4">
+                  {/* Sign up / Sign in toggle for phone */}
+                  <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+                    {(["signup", "login"] as AuthMode[]).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => { setPhoneMode(m); setError(""); setPhone(""); setPhoneName(""); }}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${phoneMode === m ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}
+                      >
+                        {m === "signup" ? "New Account" : "Sign In"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {phoneMode === "signup" && (
+                    <div>
+                      <label className="text-xs text-gray-400 font-semibold block mb-2">Full Name</label>
+                      <input
+                        value={phoneName}
+                        onChange={e => { setPhoneName(e.target.value); setError(""); }}
+                        placeholder="Your full name"
+                        className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
+                      />
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-xs text-gray-400 font-semibold block mb-2">Mobile Number</label>
                     <div className="flex gap-2">
@@ -308,15 +368,32 @@ export default function Auth() {
                         className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none ${accentBorder} transition`}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1.5">Phone login requires an existing account registered via email.</p>
                   </div>
+
+                  {phoneMode === "signup" && isScholar && (
+                    <div>
+                      <label className="text-xs text-gray-400 font-semibold block mb-2">Expertise Area</label>
+                      <select
+                        value={phoneExpertise}
+                        onChange={e => setPhoneExpertise(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-300 outline-none focus:border-cyan-500 transition cursor-pointer"
+                      >
+                        <option value="" className="bg-gray-900">Select your expertise</option>
+                        {["UPSC Civil Services","NEET Medical","JEE Engineering","CAT/MBA","SSC Exams","GATE","Banking","Other"].map(o => (
+                          <option key={o} value={o} className="bg-gray-900">{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+
                   <button
                     onClick={handlePhoneSend}
-                    disabled={phone.length !== 10}
+                    disabled={phone.length !== 10 || (phoneMode === "signup" && !phoneName.trim())}
                     className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition disabled:opacity-50`}
                   >
-                    Send OTP
+                    {phoneMode === "signup" ? "Send OTP to Sign Up" : "Send OTP to Sign In"}
                   </button>
                 </div>
               )}
