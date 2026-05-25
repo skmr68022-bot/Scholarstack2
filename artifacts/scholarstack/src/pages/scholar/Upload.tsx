@@ -8,9 +8,11 @@ import type { UploadItem } from "../../context/AppContext";
 type ContentCategory = "competitive" | "university" | "board";
 type BoardType = "CBSE" | "CISCE" | "State Board";
 
+const colors = ["bg-orange-500","bg-blue-500","bg-green-500","bg-purple-500","bg-pink-500","bg-cyan-500","bg-indigo-500","bg-red-500","bg-amber-500","bg-teal-500"];
+
 export default function Upload() {
   const [, setLocation] = useLocation();
-  const { addUpload } = useApp();
+  const { addUpload, currentUser } = useApp();
 
   const [category, setCategory] = useState<ContentCategory>("competitive");
   const [type, setType] = useState("PDF");
@@ -20,6 +22,7 @@ export default function Upload() {
   const [boardType, setBoardType] = useState<BoardType>("CBSE");
   const [boardClass, setBoardClass] = useState("Class 12");
   const [subject, setSubject] = useState("");
+  const [pages, setPages] = useState("100");
   const [price, setPrice] = useState("Paid");
   const [amount, setAmount] = useState("299");
   const [desc, setDesc] = useState("");
@@ -37,12 +40,23 @@ export default function Upload() {
         title,
         type,
         price: price === "Free" ? "Free" : `₹${amount}`,
+        original: price === "Paid" ? `₹${Math.round(parseInt(amount) * 1.7)}` : "",
         sales: 0,
         earnings: "₹0",
         rating: 0,
+        reviews: 0,
         status: "review",
         category,
         exam: category === "competitive" ? exam : category === "university" ? university : boardClass,
+        scholar: currentUser?.name || "Scholar",
+        scholarId: currentUser?.id || "unknown",
+        description: desc,
+        pages: parseInt(pages) || 100,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        tag: "New",
+        subject: subject || undefined,
+        boardType: category === "board" ? boardType : undefined,
+        submittedAt: Date.now(),
       };
       addUpload(item);
       setUploading(false);
@@ -51,12 +65,13 @@ export default function Upload() {
   };
 
   if (done) return (
-    <div className="p-6 flex flex-col items-center justify-center min-h-64 text-center">
+    <div className="p-6 flex flex-col items-center justify-center min-h-80 text-center">
       <div className="text-6xl mb-4">🎉</div>
       <h2 className="font-black text-2xl text-white mb-2">Content Submitted!</h2>
-      <p className="text-gray-400 text-sm mb-6">Your content is under review and will go live within 24 hours.</p>
+      <p className="text-gray-400 text-sm mb-2">Your content is now in the admin review queue.</p>
+      <p className="text-xs text-yellow-400 mb-6">It will appear in student browse pages only after admin approval.</p>
       <div className="flex gap-3">
-        <button onClick={() => { setDone(false); setTitle(""); setDesc(""); }} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold text-gray-300 hover:bg-white/10 transition">
+        <button onClick={() => { setDone(false); setTitle(""); setDesc(""); setPages("100"); }} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold text-gray-300 hover:bg-white/10 transition">
           Upload More
         </button>
         <button onClick={() => setLocation("/scholar/content")} className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-sm font-semibold text-white hover:opacity-90 transition">
@@ -73,7 +88,13 @@ export default function Upload() {
         <h1 className="font-black text-xl text-white flex-1">Upload Content</h1>
       </div>
 
-      {/* ── Category ── */}
+      {/* Info banner */}
+      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3 mb-5 flex items-start gap-3">
+        <span className="text-yellow-400 text-sm mt-0.5">ℹ</span>
+        <p className="text-xs text-yellow-200">After uploading, your content goes to the admin queue for review. Once approved, it will be visible to all students on ScholarStack.</p>
+      </div>
+
+      {/* Category */}
       <div className="mb-5">
         <label className="text-xs text-gray-400 font-semibold block mb-2">Content Category</label>
         <div className="flex gap-3">
@@ -92,31 +113,28 @@ export default function Upload() {
         </div>
       </div>
 
-      {/* ── Content type ── */}
+      {/* Content type */}
       <div className="flex gap-3 mb-5">
         {["PDF", "Video", "Bundle"].map(t => (
           <button key={t} onClick={() => setType(t)}
             className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl border transition ${type === t ? "bg-cyan-600/15 border-cyan-500/40 text-cyan-400" : "bg-white/3 border-white/10 text-gray-400 hover:border-white/20 hover:text-white"}`}>
             <span className="text-2xl">{t === "PDF" ? "📄" : t === "Video" ? "🎬" : "📦"}</span>
             <span className="font-bold text-sm">{t}</span>
-            <span className="text-[10px] text-center opacity-60">
-              {t === "PDF" ? "Notes, cheatsheets" : t === "Video" ? "Lectures, reels" : "Notes + Videos"}
-            </span>
+            <span className="text-[10px] opacity-60">{t === "PDF" ? "Notes, cheatsheets" : t === "Video" ? "Lectures, reels" : "Notes + Videos"}</span>
           </button>
         ))}
       </div>
 
-      {/* ── Form ── */}
       <div className="space-y-4">
         <div>
           <label className="text-xs text-gray-400 font-semibold block mb-2">Content Title *</label>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder={`e.g., Complete ${category === "competitive" ? exam : category === "university" ? university : boardClass} ${type} 2025`}
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder={`e.g., Complete ${category === "competitive" ? exam : category === "university" ? university : boardClass} Notes 2025`}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-cyan-500 transition" />
         </div>
 
         <div>
           <label className="text-xs text-gray-400 font-semibold block mb-2">Description</label>
-          <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} placeholder="What topics are covered? Who is it for?"
+          <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} placeholder="What topics are covered? Who is it for? What makes it unique?"
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-cyan-500 transition resize-none" />
         </div>
 
@@ -133,7 +151,7 @@ export default function Upload() {
             <div>
               <label className="text-xs text-gray-400 font-semibold block mb-2">Language</label>
               <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-200 outline-none focus:border-cyan-500 transition cursor-pointer">
-                {["Hindi + English", "English Only", "Hindi Only", "Regional"].map(l => <option key={l} className="bg-gray-900">{l}</option>)}
+                {["Hindi + English","English Only","Hindi Only","Regional"].map(l => <option key={l} className="bg-gray-900">{l}</option>)}
               </select>
             </div>
           </div>
@@ -186,11 +204,20 @@ export default function Upload() {
           </div>
         )}
 
+        {/* Pages */}
+        {type === "PDF" && (
+          <div>
+            <label className="text-xs text-gray-400 font-semibold block mb-2">Number of Pages</label>
+            <input type="number" value={pages} onChange={e => setPages(e.target.value)} placeholder="e.g., 150" min="1"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-cyan-500 transition" />
+          </div>
+        )}
+
         {/* Pricing */}
         <div>
           <label className="text-xs text-gray-400 font-semibold block mb-2">Pricing</label>
           <div className="flex gap-2 mb-3">
-            {["Free", "Paid"].map(p => (
+            {["Free","Paid"].map(p => (
               <button key={p} onClick={() => setPrice(p)}
                 className={`flex-1 py-2 rounded-lg text-xs font-semibold transition border ${price === p ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-transparent" : "border-white/10 text-gray-400 hover:border-white/20"}`}>
                 {p}
@@ -227,9 +254,9 @@ export default function Upload() {
           className="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-black text-sm hover:opacity-90 transition disabled:opacity-50 hover:scale-[1.01]">
           {uploading ? (
             <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Publishing…
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Publishing for Review…
             </span>
-          ) : `Submit ${type} for Review →`}
+          ) : `Submit ${type} for Admin Review →`}
         </button>
       </div>
     </div>

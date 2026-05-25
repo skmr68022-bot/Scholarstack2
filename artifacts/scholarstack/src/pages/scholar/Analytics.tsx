@@ -75,7 +75,7 @@ export default function Analytics() {
         <div className="bg-[#13131a] border border-white/10 rounded-2xl p-4">
           <h2 className="font-bold text-sm text-white mb-3">Top Performing</h2>
           <div className="space-y-3">
-            {uploads.filter(u => u.status === "active").map((u, i) => (
+            {uploads.filter(u => u.status === "live").map((u, i) => (
               <div key={u.id} className="flex items-center gap-3">
                 <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">#{i + 1}</div>
                 <div className="flex-1 min-w-0">

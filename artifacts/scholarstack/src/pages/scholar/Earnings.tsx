@@ -62,7 +62,7 @@ export default function Earnings() {
       <div className="mb-5">
         <h2 className="font-bold text-sm text-white mb-3">Revenue by Content</h2>
         <div className="bg-[#13131a] border border-white/10 rounded-2xl overflow-hidden">
-          {uploads.filter(u => u.status === "active").map((u, i) => {
+          {uploads.filter(u => u.status === "live").map((u, i) => {
             const pct = u.sales > 0 ? Math.min(100, (u.sales / 2000) * 100) : 0;
             const colors = ["from-cyan-500 to-blue-500", "from-violet-500 to-indigo-500", "from-green-500 to-emerald-500"];
             return (
