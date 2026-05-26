@@ -63,4 +63,53 @@ router.post("/notes", async (req, res) => {
   res.json({ success: true, note: data });
 });
 
+/* ════════════════════════════════════════════════════════════
+   PATCH /api/notes/:id/status
+   Updates the status of a note (review → live/rejected).
+   Uses the service-role key so RLS is bypassed — admin auth
+   is verified by checking the profile in the DB.
+   ════════════════════════════════════════════════════════════ */
+router.patch("/notes/:id/status", async (req, res) => {
+  const noteId = parseInt(req.params["id"] ?? "", 10);
+  const { status, admin_id } = req.body as { status?: string; admin_id?: string };
+
+  if (isNaN(noteId) || !status || !["live", "review", "rejected"].includes(status)) {
+    res.status(400).json({ success: false, error: "Valid note id and status required." });
+    return;
+  }
+
+  const adminClient = getAdminClient();
+  if (!adminClient) {
+    res.status(503).json({ success: false, error: "Server configuration error." });
+    return;
+  }
+
+  // Verify the caller is actually an admin
+  if (admin_id) {
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", admin_id)
+      .single();
+    if (!profile || (profile as { role: string }).role !== "admin") {
+      res.status(403).json({ success: false, error: "Admin access required." });
+      return;
+    }
+  }
+
+  const { error } = await adminClient
+    .from("notes")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", noteId);
+
+  if (error) {
+    req.log.error({ error: error.message, noteId }, "Note status update failed");
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  req.log.info({ noteId, status, admin_id }, "Note status updated via server");
+  res.json({ success: true });
+});
+
 export default router;

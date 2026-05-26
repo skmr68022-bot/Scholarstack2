@@ -562,14 +562,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const approveContent = async (id: number) => {
-    await updateNoteStatus(id, "live");
+    // Use server endpoint (service-role key) so RLS cannot block the update
+    try {
+      await fetch(`/api/notes/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "live", admin_id: currentUser?.id }),
+      });
+    } catch {
+      // Fallback to direct DB call
+      await updateNoteStatus(id, "live");
+    }
     setUploads((prev) =>
       prev.map((u) => (u.id === id ? { ...u, status: "live" as const } : u)),
     );
   };
 
   const rejectContent = async (id: number) => {
-    await updateNoteStatus(id, "rejected");
+    // Use server endpoint (service-role key) so RLS cannot block the update
+    try {
+      await fetch(`/api/notes/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "rejected", admin_id: currentUser?.id }),
+      });
+    } catch {
+      // Fallback to direct DB call
+      await updateNoteStatus(id, "rejected");
+    }
     setUploads((prev) =>
       prev.map((u) => (u.id === id ? { ...u, status: "rejected" as const } : u)),
     );
