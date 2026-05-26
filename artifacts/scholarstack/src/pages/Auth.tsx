@@ -86,7 +86,7 @@ export default function Auth() {
       setLoading(true);
       const result = await withTimeout(
         login(trimEmail, trimPw, (isAdmin ? "admin" : isScholar ? "scholar" : "student") as "student" | "scholar" | "admin"),
-        15000,
+        60000,
         { success: false, error: "Request timed out. Check your connection." },
       );
       setLoading(false);
@@ -104,7 +104,7 @@ export default function Auth() {
     setLoading(true);
     const result = await withTimeout(
       signup({ name: trimName, email: trimEmail, password: trimPw, role: isScholar ? "scholar" : "student", expertise: expertise || undefined }),
-      20000,
+      60000,
       { success: false, error: "Request timed out. Check your connection." },
     );
     setLoading(false);
@@ -125,7 +125,7 @@ export default function Auth() {
     setLoading(true);
     const result = await withTimeout(
       verifyEmailOtp(pendingEmail, emailOtp.trim()),
-      15000,
+      60000,
       { success: false, error: "Request timed out." },
     );
     setLoading(false);
@@ -143,7 +143,7 @@ export default function Auth() {
     setLoading(true);
     const result = await withTimeout(
       sendPhoneOtp(phone, phoneName.trim() || undefined, isScholar ? "scholar" : "student", undefined),
-      15000,
+      60000,
       { success: false, error: "Request timed out." },
     );
     setLoading(false);
@@ -162,7 +162,7 @@ export default function Auth() {
     setLoading(true);
     const result = await withTimeout(
       verifyPhoneOtp(phone, phoneOtp.trim()),
-      15000,
+      60000,
       { success: false, error: "Request timed out." },
     );
     setLoading(false);
