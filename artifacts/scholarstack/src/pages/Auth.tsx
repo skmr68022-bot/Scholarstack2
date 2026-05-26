@@ -460,32 +460,33 @@ export default function Auth() {
               </p>
 
               {/* Tab switcher */}
-              {!isAdmin && (
-                <div className="flex gap-1 mb-5 bg-white/5 rounded-xl p-1 border border-white/10">
-                  {(["email", "phone"] as Tab[]).map(t => (
-                    <button key={t} onClick={() => switchTab(t)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${tab === t ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
-                      {t === "phone" ? "Mobile OTP" : "Email"}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="flex gap-1 mb-5 bg-white/5 rounded-xl p-1 border border-white/10">
+                {(["email", "phone"] as Tab[]).map(t => (
+                  <button key={t} onClick={() => switchTab(t)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${tab === t ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
+                    {t === "phone" ? "Mobile OTP" : "Email"}
+                  </button>
+                ))}
+              </div>
 
               {/* ── Phone OTP tab ── */}
-              {tab === "phone" && !isAdmin && (
+              {tab === "phone" && (
                 <div className="space-y-4">
-                  <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
-                    <button onClick={() => setIsNewUser(false)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${!isNewUser ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
-                      Sign In
-                    </button>
-                    <button onClick={() => setIsNewUser(true)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${isNewUser ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
-                      New Account
-                    </button>
-                  </div>
+                  {/* Sign In / New Account toggle — hidden for admin (sign-in only) */}
+                  {!isAdmin && (
+                    <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+                      <button onClick={() => setIsNewUser(false)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${!isNewUser ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
+                        Sign In
+                      </button>
+                      <button onClick={() => setIsNewUser(true)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${isNewUser ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
+                        New Account
+                      </button>
+                    </div>
+                  )}
 
-                  {isNewUser && (
+                  {isNewUser && !isAdmin && (
                     <div>
                       <label className="text-xs text-gray-400 font-semibold block mb-2">Full Name</label>
                       <input value={phoneName} onChange={e => { setPhoneName(e.target.value); setError(""); }}
