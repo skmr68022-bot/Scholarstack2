@@ -143,13 +143,14 @@ export default function Upload() {
       <section className="bg-[#13131a] border border-white/8 rounded-2xl p-5 mb-4">
         <p className="text-xs text-gray-400 font-semibold mb-3">Content Type</p>
         <div className="flex gap-2">
-          {["PDF", "Video", "Bundle"].map(t => (
+          {["PDF", "Bundle"].map(t => (
             <button key={t} onClick={() => setType(t)}
               className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition ${type === t ? "bg-cyan-600/30 border-cyan-500/50 text-cyan-300" : "bg-white/5 border-white/10 text-gray-400 hover:text-white"}`}>
               {t}
             </button>
           ))}
         </div>
+        <p className="text-[10px] text-gray-500 mt-2">To upload a video reel, use <span className="text-cyan-400 font-semibold">Upload Video</span> in the sidebar.</p>
       </section>
 
       {/* Details */}

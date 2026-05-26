@@ -4,7 +4,8 @@ import { useApp } from "../context/AppContext";
 
 const navItems = [
   { icon: "◈", label: "Overview", path: "/scholar" },
-  { icon: "▲", label: "Upload Content", path: "/scholar/upload" },
+  { icon: "▲", label: "Upload Notes", path: "/scholar/upload" },
+  { icon: "▶", label: "Upload Video", path: "/scholar/video" },
   { icon: "▣", label: "My Content", path: "/scholar/content" },
   { icon: "◎", label: "Earnings", path: "/scholar/earnings" },
   { icon: "↗", label: "Analytics", path: "/scholar/analytics" },

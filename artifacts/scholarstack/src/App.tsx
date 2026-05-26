@@ -23,6 +23,7 @@ import Profile from "./pages/student/Profile";
 import ScholarLayout from "./layouts/ScholarLayout";
 import ScholarOverview from "./pages/scholar/Overview";
 import Upload from "./pages/scholar/Upload";
+import VideoUpload from "./pages/scholar/VideoUpload";
 import Content from "./pages/scholar/Content";
 import Earnings from "./pages/scholar/Earnings";
 import Analytics from "./pages/scholar/Analytics";
@@ -79,6 +80,7 @@ function ScholarRoutes() {
         <Switch>
           <Route path="/scholar" component={ScholarOverview} />
           <Route path="/scholar/upload" component={Upload} />
+          <Route path="/scholar/video" component={VideoUpload} />
           <Route path="/scholar/content" component={Content} />
           <Route path="/scholar/earnings" component={Earnings} />
           <Route path="/scholar/analytics" component={Analytics} />
