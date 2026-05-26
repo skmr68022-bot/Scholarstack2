@@ -61,8 +61,14 @@ async function sendOtpEmail(to: string, otp: string, name: string): Promise<bool
           </div>`,
       }),
     });
-    return res.ok;
-  } catch {
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`[Resend] HTTP ${res.status}: ${errBody}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`[Resend] fetch error:`, e);
     return false;
   }
 }
