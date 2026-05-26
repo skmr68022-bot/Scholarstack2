@@ -231,33 +231,25 @@ export default function Upload() {
         <p className="text-xs text-gray-400 font-semibold mb-3">Upload Files <span className="text-gray-600">(optional)</span></p>
         <div className="space-y-3">
           <div>
-            <input
-              id="upload-file-input"
-              type="file"
-              accept={type === "PDF" || type === "Bundle" ? "application/pdf,.pdf" : "video/*"}
-              onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
-              className="sr-only"
-            />
-            <label
-              htmlFor="upload-file-input"
-              className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer"
-            >
+            <label className="relative w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer overflow-hidden">
+              <input
+                type="file"
+                accept={type === "PDF" || type === "Bundle" ? "application/pdf,.pdf" : "video/*"}
+                onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
               <span>📎</span>
               {selectedFile ? selectedFile.name : `Choose ${type} file`}
             </label>
           </div>
           <div>
-            <input
-              id="upload-thumb-input"
-              type="file"
-              accept="image/*"
-              onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
-              className="sr-only"
-            />
-            <label
-              htmlFor="upload-thumb-input"
-              className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer"
-            >
+            <label className="relative w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer overflow-hidden">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
               <span>🖼</span>
               {selectedThumb ? selectedThumb.name : "Choose thumbnail image (optional)"}
             </label>

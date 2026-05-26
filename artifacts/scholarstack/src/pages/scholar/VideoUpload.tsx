@@ -213,19 +213,17 @@ export default function VideoUpload() {
 
         {/* Video file */}
         <div>
-          <input
-            id="video-file-input"
-            type="file"
-            accept="video/*"
-            onChange={e => setSelectedVideo(e.target.files?.[0] ?? null)}
-            className="sr-only"
-          />
           <label
-            htmlFor="video-file-input"
-            className={`w-full py-5 rounded-xl border-2 border-dashed transition flex flex-col items-center justify-center gap-2 cursor-pointer ${
+            className={`relative w-full py-5 rounded-xl border-2 border-dashed transition flex flex-col items-center justify-center gap-2 cursor-pointer overflow-hidden ${
               selectedVideo ? "border-purple-500/50 bg-purple-600/10" : "border-white/15 hover:border-purple-500/40 hover:bg-purple-600/5"
             }`}
           >
+            <input
+              type="file"
+              accept="video/*"
+              onChange={e => setSelectedVideo(e.target.files?.[0] ?? null)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
             <span className="text-2xl">{selectedVideo ? "▶" : "+"}</span>
             <div className="text-center">
               {selectedVideo ? (
@@ -245,19 +243,17 @@ export default function VideoUpload() {
 
         {/* Thumbnail */}
         <div>
-          <input
-            id="video-thumb-input"
-            type="file"
-            accept="image/*"
-            onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
-            className="sr-only"
-          />
           <label
-            htmlFor="video-thumb-input"
-            className={`w-full py-3 rounded-xl border border-dashed transition flex items-center justify-center gap-2 text-xs cursor-pointer ${
+            className={`relative w-full py-3 rounded-xl border border-dashed transition flex items-center justify-center gap-2 text-xs cursor-pointer overflow-hidden ${
               selectedThumb ? "border-purple-500/40 text-purple-300" : "border-white/15 text-gray-400 hover:text-white hover:border-white/30"
             }`}
           >
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
             <span>🖼</span>
             {selectedThumb ? selectedThumb.name : "Choose thumbnail image (optional)"}
           </label>
