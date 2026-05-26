@@ -30,42 +30,61 @@ router.post("/auth/signup", async (req, res) => {
   if (!adminClient) {
     res.status(503).json({
       success: false,
-      error: "Server auth not configured. Add SUPABASE_SERVICE_ROLE_KEY to environment.",
+      error: "SUPABASE_SERVICE_ROLE_KEY not configured.",
     });
     return;
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Step 1: create the user with admin API (auto-confirmed)
   const { data, error } = await adminClient.auth.admin.createUser({
-    email: email.trim().toLowerCase(),
+    email: normalizedEmail,
     password: password.trim(),
     email_confirm: true,
-    user_metadata: { name: name.trim(), role, expertise: expertise ?? null },
+    user_metadata: {
+      name: name.trim(),
+      role,
+      expertise: expertise ?? null,
+    },
   });
 
-  if (error || !data.user) {
-    req.log.error({ error }, "Signup failed");
-    res.status(400).json({ success: false, error: error?.message ?? "Signup failed." });
+  if (error) {
+    req.log.error({ error: error.message, code: error.code }, "Admin createUser failed");
+
+    // If user already exists, still return success so they can sign in
+    if (
+      error.message?.includes("already") ||
+      error.message?.includes("exists") ||
+      error.code === "email_exists"
+    ) {
+      res.json({ success: true, existed: true });
+      return;
+    }
+
+    res.status(400).json({ success: false, error: error.message });
     return;
   }
 
-  const profilePayload = {
-    id: data.user.id,
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    role,
-    expertise: expertise ?? null,
-    is_verified: false,
-  };
+  const userId = data.user?.id;
 
-  const { error: profileError } = await adminClient
-    .from("profiles")
-    .upsert(profilePayload, { onConflict: "id" });
-
-  if (profileError) {
-    req.log.warn({ profileError }, "Profile upsert failed after signup");
+  // Step 2: upsert the profile manually (in case trigger didn't run)
+  if (userId) {
+    await adminClient.from("profiles").upsert(
+      {
+        id: userId,
+        name: name.trim(),
+        email: normalizedEmail,
+        role,
+        expertise: expertise ?? null,
+        is_verified: false,
+      },
+      { onConflict: "id" },
+    );
   }
 
-  res.json({ success: true, userId: data.user.id });
+  req.log.info({ userId, role }, "User created successfully");
+  res.json({ success: true, userId });
 });
 
 export default router;
