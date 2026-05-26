@@ -32,9 +32,16 @@ import Analytics from "./pages/scholar/Analytics";
 const queryClient = new QueryClient();
 
 function RequireAuth({ children, requiredRole }: { children: React.ReactNode; requiredRole: "student" | "scholar" | "admin" }) {
-  const { currentUser } = useApp();
+  const { currentUser, loading } = useApp();
   const [, setLocation] = useLocation();
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#070709]">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-violet-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
   if (!currentUser) {
     setLocation(`/auth/${requiredRole}`);
     return null;

@@ -226,22 +226,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = useCallback(
     async (user: User) => {
-      let profile = await getProfile(user.id);
-      if (!profile) {
-        profile = await upsertProfile({
-          id: user.id,
-          name:
-            (user.user_metadata?.name as string | undefined) ??
-            user.email?.split("@")[0] ??
-            "User",
-          email: user.email ?? null,
-          role:
-            (user.user_metadata?.role as "student" | "scholar") ?? "student",
-          expertise:
-            (user.user_metadata?.expertise as string | undefined) ?? null,
-        });
-      }
-      if (profile) await applyProfile(profile);
+      // Set currentUser immediately from JWT metadata — no network call required.
+      // This means the user can navigate even if Supabase DB calls hang.
+      const fallbackName =
+        (user.user_metadata?.name as string | undefined) ??
+        user.email?.split("@")[0] ??
+        "User";
+      const fallbackRole =
+        (user.user_metadata?.role as "student" | "scholar" | "admin" | undefined) ??
+        "student";
+
+      setCurrentUser({
+        id: user.id,
+        name: fallbackName,
+        email: user.email ?? "",
+        role: fallbackRole,
+      });
+      setRole(fallbackRole);
+
+      // Enrich with DB profile + role data in the background — don't block UI on it
+      (async () => {
+        try {
+          let profile = await getProfile(user.id);
+          if (!profile) {
+            profile = await upsertProfile({
+              id: user.id,
+              name: fallbackName,
+              email: user.email ?? null,
+              role: fallbackRole === "admin" ? "student" : fallbackRole,
+              expertise:
+                (user.user_metadata?.expertise as string | undefined) ?? null,
+            });
+          }
+          if (profile) await applyProfile(profile);
+        } catch (err) {
+          console.warn("Background profile enrichment failed:", err);
+        }
+      })();
     },
     [applyProfile],
   );
