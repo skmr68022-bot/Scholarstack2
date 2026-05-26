@@ -1,25 +1,39 @@
 
 import { useLocation } from "wouter";
-import { notes } from "../../data/constants";
 import { useApp } from "../../context/AppContext";
+
+const examCountdowns = [
+  { name: "UPSC Prelims", date: "June 1, 2026", days: 6, c: "from-orange-500 to-red-500" },
+  { name: "NEET UG", date: "May 30, 2026", days: 4, c: "from-green-500 to-emerald-500" },
+  { name: "SSC CGL", date: "June 14, 2026", days: 19, c: "from-blue-500 to-indigo-500" },
+];
+
+const featuredScholars = [
+  { name: "Dr. Rajiv Menon", tag: "UPSC · IAS 2019", sales: "₹4.2L earned", avatar: "RM", color: "from-orange-400 to-red-400" },
+  { name: "Priya Sharma", tag: "NEET · AIR 47", sales: "₹2.8L earned", avatar: "PS", color: "from-green-400 to-teal-400" },
+  { name: "Arjun Kulkarni", tag: "JEE · IIT Bombay", sales: "₹3.1L earned", avatar: "AK", color: "from-blue-400 to-indigo-400" },
+  { name: "Kavya Reddy", tag: "CA Final · AIR 3", sales: "₹1.9L earned", avatar: "KR", color: "from-pink-400 to-rose-400" },
+];
 
 export default function StudentHome() {
   const [, setLocation] = useLocation();
-  const { purchased } = useApp();
+  const { currentUser, purchased } = useApp();
+
+  const firstName = currentUser?.name?.split(" ")[0] ?? "there";
 
   return (
     <div className="p-6">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-black text-white">Good morning, Arjun! 👋</h1>
-          <p className="text-gray-400 text-xs mt-0.5">3 upcoming exams · 14-day streak 🔥</p>
+          <h1 className="text-xl font-black text-white">Hi, {firstName}! 👋</h1>
+          <p className="text-gray-400 text-xs mt-0.5">
+            {purchased.size > 0 ? `${purchased.size} notes purchased` : "Find notes for your exam"} · Keep it up!
+          </p>
         </div>
         <div className="flex gap-2">
-          <div className="relative">
-            <button className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-base hover:bg-white/10 transition text-white">🔔</button>
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-[9px] flex items-center justify-center font-bold text-white">5</span>
-          </div>
-          <button onClick={() => setLocation("/student/notes")} className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-xs font-semibold text-white hover:opacity-90 transition">
+          <button onClick={() => setLocation("/student/notes")}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-xs font-semibold text-white hover:opacity-90 transition">
             Browse Notes
           </button>
         </div>
@@ -27,103 +41,69 @@ export default function StudentHome() {
 
       {/* Exam countdowns */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        {[
-          { name: "UPSC Prelims", date: "June 1", days: 7, c: "from-orange-500 to-red-500" },
-          { name: "NEET UG", date: "May 30", days: 5, c: "from-green-500 to-emerald-500" },
-          { name: "SSC CGL", date: "June 14", days: 20, c: "from-blue-500 to-indigo-500" },
-        ].map(e => (
+        {examCountdowns.map(e => (
           <div key={e.name} className="relative bg-[#13131a] border border-white/10 rounded-2xl p-4 overflow-hidden cursor-pointer hover:border-white/20 transition">
-            <div className={`absolute inset-0 bg-gradient-to-br ${e.c} opacity-8`} />
+            <div className={`absolute inset-0 bg-gradient-to-br ${e.c} opacity-[0.08]`} />
             <div className="relative">
               <div className={`text-[10px] font-bold bg-gradient-to-r ${e.c} bg-clip-text text-transparent mb-1`}>UPCOMING</div>
               <div className="font-bold text-sm text-white leading-tight">{e.name}</div>
               <div className="text-[10px] text-gray-400 mt-1">{e.date}</div>
-              <div className={`mt-2 text-xs font-black bg-gradient-to-r ${e.c} bg-clip-text text-transparent`}>⏰ {e.days} days left</div>
+              <div className={`text-2xl font-black bg-gradient-to-r ${e.c} bg-clip-text text-transparent mt-2`}>{e.days}d</div>
+              <div className="text-[9px] text-gray-500">days left</div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Continue learning */}
-      {purchased.size > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-sm text-white">Continue Learning</h2>
-            <button onClick={() => setLocation("/student/library")} className="text-violet-400 text-xs">View all →</button>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {notes.filter(n => purchased.has(n.id)).slice(0, 3).map((n, i) => {
-              const colors = ["from-violet-500 to-indigo-500", "from-pink-500 to-rose-500", "from-blue-500 to-cyan-500"];
-              const pcts = [68, 42, 91];
-              return (
-                <div key={n.id} onClick={() => setLocation(`/student/notes/${n.id}`)} className="bg-[#13131a] border border-white/10 rounded-2xl p-4 cursor-pointer hover:border-violet-500/30 transition group">
-                  <div className={`h-1 rounded-full bg-gradient-to-r ${colors[i % 3]} mb-3`} style={{ width: `${pcts[i % 3]}%` }} />
-                  <div className="font-semibold text-xs text-white leading-tight mb-1 line-clamp-2">{n.title}</div>
-                  <div className="text-[10px] text-gray-400 mb-3">{n.scholar}</div>
-                  <div className="flex items-center justify-between">
-                    <span className={`text-[10px] font-black bg-gradient-to-r ${colors[i % 3]} bg-clip-text text-transparent`}>{pcts[i % 3]}%</span>
-                    <button className={`text-[10px] px-2.5 py-1 rounded-lg bg-gradient-to-r ${colors[i % 3]} text-white font-semibold`}>Continue →</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Recommended */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-sm text-white">Recommended for You</h2>
-          <button onClick={() => setLocation("/student/notes")} className="text-violet-400 text-xs">Browse all →</button>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          {notes.slice(0, 4).map(n => (
-            <div key={n.id} onClick={() => setLocation(`/student/notes/${n.id}`)} className="bg-[#13131a] border border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-violet-500/30 transition group">
-              <div className={`h-20 flex items-center justify-center relative overflow-hidden`}>
-                <div className={`absolute inset-0 ${n.color} opacity-40`} />
-                <span className="relative text-3xl">📄</span>
-              </div>
-              <div className="p-3">
-                <div className="font-semibold text-xs text-white leading-tight mb-1 line-clamp-2">{n.title}</div>
-                <div className="text-[10px] text-gray-400 mb-1">{n.scholar}</div>
-                <div className="text-[10px] text-yellow-400 mb-2">⭐ {n.rating}</div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-black text-xs text-violet-400">{n.price}</span>
-                  {n.original && <span className="text-[10px] text-gray-500 line-through">{n.original}</span>}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Browse sections */}
+      <h2 className="font-bold text-sm text-white mb-3">Browse by Category</h2>
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[
+          { label: "Competitive Exams", icon: "🏆", path: "/student/notes", desc: "UPSC, NEET, JEE, SSC", gradient: "from-violet-600 to-indigo-600" },
+          { label: "University Notes", icon: "🎓", path: "/student/university", desc: "DU, Mumbai, Anna & more", gradient: "from-blue-600 to-cyan-600" },
+          { label: "Board Exams", icon: "📚", path: "/student/board", desc: "CBSE, CISCE, State Boards", gradient: "from-green-600 to-teal-600" },
+        ].map(s => (
+          <button key={s.label} onClick={() => setLocation(s.path)}
+            className="bg-[#13131a] border border-white/8 rounded-2xl p-4 text-left hover:border-violet-500/30 hover:bg-white/3 transition group">
+            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center text-xl mb-3`}>{s.icon}</div>
+            <div className="font-bold text-xs text-white mb-0.5">{s.label}</div>
+            <div className="text-[10px] text-gray-500">{s.desc}</div>
+          </button>
+        ))}
       </div>
 
-      {/* Scholar spotlight */}
-      <div className="mt-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-sm text-white">Top Scholars</h2>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { name: "Dr. Rajiv Menon", tag: "UPSC · AIR 7", avatar: "RM", bg: "from-orange-400 to-red-500", students: "48K", rating: 4.9 },
-            { name: "Priya Sharma", tag: "NEET · 720/720", avatar: "PS", bg: "from-pink-400 to-rose-500", students: "62K", rating: 4.8 },
-            { name: "Karan Mehta", tag: "IIT · JEE", avatar: "KM", bg: "from-blue-400 to-indigo-500", students: "35K", rating: 4.9 },
-            { name: "MBA Guru", tag: "CAT · 99.8%ile", avatar: "MG", bg: "from-purple-400 to-violet-500", students: "29K", rating: 4.7 },
-          ].map(s => (
-            <div key={s.name} className="bg-[#13131a] border border-white/10 rounded-2xl p-4 text-center cursor-pointer hover:border-violet-500/30 transition">
-              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${s.bg} flex items-center justify-center font-black text-sm text-white mx-auto mb-3`}>{s.avatar}</div>
-              <div className="font-bold text-xs text-white mb-0.5">{s.name}</div>
-              <div className="text-[10px] text-gray-400 mb-2">{s.tag}</div>
-              <div className="flex items-center justify-center gap-2 text-[10px] text-gray-300">
-                <span>👥 {s.students}</span>
-                <span>⭐ {s.rating}</span>
-              </div>
-              <button className="mt-3 w-full py-1.5 rounded-lg bg-violet-500/15 text-violet-400 text-[10px] font-semibold border border-violet-500/20 hover:bg-violet-500/25 transition">
-                Follow
-              </button>
+      {/* Quick access */}
+      <h2 className="font-bold text-sm text-white mb-3">Quick Access</h2>
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Video Reels", icon: "🎬", path: "/student/reels", color: "text-pink-400" },
+          { label: "AI Tutor", icon: "🤖", path: "/student/ai", color: "text-cyan-400" },
+          { label: "My Library", icon: "📖", path: "/student/library", color: "text-violet-400" },
+          { label: "My Orders", icon: "🛒", path: "/student/orders", color: "text-green-400" },
+        ].map(q => (
+          <button key={q.label} onClick={() => setLocation(q.path)}
+            className="bg-[#13131a] border border-white/8 rounded-xl p-3 text-center hover:border-white/20 hover:bg-white/3 transition">
+            <div className="text-xl mb-1">{q.icon}</div>
+            <div className={`text-[10px] font-semibold ${q.color}`}>{q.label}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Top scholars */}
+      <h2 className="font-bold text-sm text-white mb-3">Top Scholars</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {featuredScholars.map(s => (
+          <div key={s.name} className="bg-[#13131a] border border-white/8 rounded-2xl p-4 flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center font-black text-sm text-white shrink-0`}>
+              {s.avatar}
             </div>
-          ))}
-        </div>
+            <div className="min-w-0">
+              <p className="font-bold text-xs text-white truncate">{s.name}</p>
+              <p className="text-[10px] text-gray-400 truncate">{s.tag}</p>
+              <p className="text-[10px] text-green-400 font-semibold">{s.sales}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

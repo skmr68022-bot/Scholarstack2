@@ -1,25 +1,47 @@
 
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useApp } from "../context/AppContext";
 
 export default function Splash() {
   const [, setLocation] = useLocation();
+  const { currentUser, loading } = useApp();
   const [pct, setPct] = useState(0);
   const [fading, setFading] = useState(false);
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
     let v = 0;
     const id = setInterval(() => {
       v += 2;
-      setPct(v);
-      if (v >= 100) {
+      setPct(Math.min(v, loading ? 85 : 100));
+      if (v >= 85 && !loading && !resolved) {
+        setPct(100);
         clearInterval(id);
+        setResolved(true);
         setFading(true);
-        setTimeout(() => setLocation("/role"), 400);
+        setTimeout(() => {
+          if (currentUser) {
+            if (currentUser.role === "admin") setLocation("/admin");
+            else if (currentUser.role === "scholar") setLocation("/scholar");
+            else setLocation("/student");
+          } else {
+            setLocation("/role");
+          }
+        }, 400);
+      }
+      if (v >= 140) {
+        clearInterval(id);
+        if (!resolved) {
+          setPct(100);
+          setResolved(true);
+          setFading(true);
+          setTimeout(() => setLocation("/role"), 400);
+        }
       }
     }, 30);
     return () => clearInterval(id);
-  }, [setLocation]);
+  }, [loading, currentUser, setLocation, resolved]);
 
   return (
     <div
@@ -54,7 +76,9 @@ export default function Splash() {
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="text-xs text-gray-500 mt-2 text-center">Loading your experience…</div>
+          <div className="text-xs text-gray-500 mt-2 text-center">
+            {loading ? "Checking your session…" : "Loading your experience…"}
+          </div>
         </div>
       </div>
 

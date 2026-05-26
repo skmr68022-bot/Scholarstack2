@@ -15,7 +15,19 @@ const maxV = Math.max(...weekData.map(d => d.v));
 
 export default function Analytics() {
   const [, setLocation] = useLocation();
-  const { uploads } = useApp();
+  const { uploads, currentUser } = useApp();
+
+  const myUploads = uploads.filter(u => u.scholarId === currentUser?.id);
+  const liveUploads = myUploads.filter(u => u.status === "live");
+
+  const totalSales = myUploads.reduce((s, u) => s + u.sales, 0);
+  const totalViews = totalSales * 8; // estimated views
+  const totalEarningsRaw = myUploads.reduce((sum, u) => {
+    if (u.price === "Free" || !u.price) return sum;
+    const amt = parseInt(u.price.replace(/[^0-9]/g, "")) || 0;
+    return sum + Math.round(amt * u.sales * 0.7);
+  }, 0);
+  const formatAmt = (n: number) => n >= 1000 ? `₹${Math.round(n / 1000)}K` : `₹${n}`;
 
   return (
     <div className="p-6">
@@ -29,18 +41,17 @@ export default function Analytics() {
         </select>
       </div>
 
-      {/* Top row */}
+      {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-5">
         {[
-          { label: "Total Views", value: "24.8K", change: "+12%", icon: "👁", color: "text-cyan-400" },
-          { label: "New Followers", value: "324", change: "+8%", icon: "👥", color: "text-blue-400" },
-          { label: "Revenue", value: "₹22,480", change: "+14%", icon: "💰", color: "text-green-400" },
-          { label: "Conversion", value: "3.8%", change: "+0.5%", icon: "↗", color: "text-violet-400" },
+          { label: "Total Views", value: totalViews > 0 ? `${(totalViews / 1000).toFixed(1)}K` : "0", icon: "👁", color: "text-cyan-400" },
+          { label: "Total Sales", value: String(totalSales), icon: "🛒", color: "text-blue-400" },
+          { label: "Revenue", value: formatAmt(totalEarningsRaw), icon: "💰", color: "text-green-400" },
+          { label: "Live Content", value: String(liveUploads.length), icon: "📄", color: "text-violet-400" },
         ].map(s => (
           <div key={s.label} className="bg-[#13131a] border border-white/10 rounded-2xl p-4">
             <div className="flex items-center gap-1.5 mb-2">
               <span className="text-base">{s.icon}</span>
-              <span className="text-[10px] text-green-400 font-semibold">{s.change}</span>
             </div>
             <div className={`text-xl font-black ${s.color} mb-0.5`}>{s.value}</div>
             <div className="text-[10px] text-gray-400">{s.label}</div>
@@ -51,7 +62,7 @@ export default function Analytics() {
       {/* Chart */}
       <div className="bg-[#13131a] border border-white/10 rounded-2xl p-5 mb-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-sm text-white">Views & Sales (7 Days)</h2>
+          <h2 className="font-bold text-sm text-white">Views Trend (7 Days)</h2>
           <div className="flex gap-3 text-[10px]">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" /> Views</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> Sales</span>
@@ -70,24 +81,32 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Top performing */}
       <div className="grid grid-cols-2 gap-4">
+        {/* Top performing */}
         <div className="bg-[#13131a] border border-white/10 rounded-2xl p-4">
           <h2 className="font-bold text-sm text-white mb-3">Top Performing</h2>
-          <div className="space-y-3">
-            {uploads.filter(u => u.status === "live").map((u, i) => (
-              <div key={u.id} className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">#{i + 1}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-white font-medium truncate">{u.title}</div>
-                  <div className="text-[10px] text-gray-400">{u.sales} sales</div>
+          {liveUploads.length === 0 ? (
+            <div className="text-center py-6 text-gray-500">
+              <p className="text-2xl mb-2">📊</p>
+              <p className="text-xs">No live content yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {liveUploads.slice(0, 5).map((u, i) => (
+                <div key={u.id} className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">#{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-white font-medium truncate">{u.title}</div>
+                    <div className="text-[10px] text-gray-400">{u.sales} sales · {u.price}</div>
+                  </div>
+                  <div className="font-bold text-xs text-green-400 shrink-0">{u.earnings}</div>
                 </div>
-                <div className="font-bold text-xs text-green-400">{u.earnings}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* Audience */}
         <div className="bg-[#13131a] border border-white/10 rounded-2xl p-4">
           <h2 className="font-bold text-sm text-white mb-3">Audience Insights</h2>
           <div className="space-y-3">
@@ -106,6 +125,7 @@ export default function Analytics() {
               </div>
             ))}
           </div>
+          <p className="text-[9px] text-gray-600 mt-4">Based on exam tags of purchased notes</p>
         </div>
       </div>
     </div>

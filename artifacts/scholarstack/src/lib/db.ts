@@ -1,23 +1,29 @@
 import { supabase } from "./supabase";
-import type { Database, Profile, Note } from "./database.types";
+import type { Profile, Note, Purchase, ScholarApproval } from "./database.types";
 
 /* ─── Profiles ────────────────────────────────────────────── */
 
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-  return data;
+  return (data as Profile) ?? null;
 }
 
-export async function upsertProfile(
-  profile: Database["public"]["Tables"]["profiles"]["Insert"],
-): Promise<Profile | null> {
+export async function upsertProfile(profile: {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  role?: "student" | "scholar" | "admin";
+  expertise?: string | null;
+  avatar_url?: string | null;
+}): Promise<Profile | null> {
   const { data } = await supabase.from("profiles").upsert(profile).select().single();
-  return data;
+  return (data as Profile) ?? null;
 }
 
 export async function updateProfile(
   userId: string,
-  updates: Database["public"]["Tables"]["profiles"]["Update"],
+  updates: Partial<Omit<Profile, "id" | "created_at" | "updated_at">>,
 ): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase
     .from("profiles")
@@ -42,19 +48,38 @@ export async function getNotes(filters?: {
   if (filters?.boardType) q = q.eq("board_type", filters.boardType);
   if (filters?.exam) q = q.eq("exam", filters.exam);
   const { data } = await q.order("sales_count", { ascending: false });
-  return data ?? [];
+  return ((data as Note[]) ?? []);
 }
 
 export async function getNoteById(id: number): Promise<Note | null> {
   const { data } = await supabase.from("notes").select("*").eq("id", id).single();
-  return data;
+  return (data as Note) ?? null;
 }
 
-export async function insertNote(
-  note: Database["public"]["Tables"]["notes"]["Insert"],
-): Promise<{ data: Note | null; error?: string }> {
+export async function insertNote(note: {
+  title: string;
+  description?: string | null;
+  scholar_id?: string | null;
+  scholar_name?: string;
+  price?: string;
+  original_price?: string | null;
+  exam?: string | null;
+  category?: string | null;
+  board_type?: string | null;
+  subject?: string | null;
+  pages?: number;
+  color?: string;
+  tag?: string;
+  rating?: number;
+  reviews_count?: number;
+  sales_count?: number;
+  content_type?: string;
+  status?: string;
+  file_url?: string | null;
+  thumbnail_url?: string | null;
+}): Promise<{ data: Note | null; error?: string }> {
   const { data, error } = await supabase.from("notes").insert(note).select().single();
-  return { data, error: error?.message };
+  return { data: (data as Note) ?? null, error: error?.message };
 }
 
 export async function updateNoteStatus(
@@ -69,24 +94,30 @@ export async function updateNoteStatus(
 }
 
 export async function getAllNotes(): Promise<Note[]> {
-  const { data } = await supabase.from("notes").select("*").order("created_at", { ascending: false });
-  return data ?? [];
+  const { data } = await supabase
+    .from("notes")
+    .select("*")
+    .order("created_at", { ascending: false });
+  return ((data as Note[]) ?? []);
 }
 
 /* ─── Purchases ───────────────────────────────────────────── */
 
 export async function getPurchasedNoteIds(studentId: string): Promise<number[]> {
-  const { data } = await supabase.from("purchases").select("note_id").eq("student_id", studentId);
-  return (data ?? []).map((p) => p.note_id);
+  const { data } = await supabase
+    .from("purchases")
+    .select("note_id")
+    .eq("student_id", studentId);
+  return ((data as { note_id: number }[]) ?? []).map((p) => p.note_id);
 }
 
-export async function getPurchases(studentId: string) {
+export async function getPurchases(studentId: string): Promise<(Purchase & { notes: Note | null })[]> {
   const { data } = await supabase
     .from("purchases")
     .select("*, notes(*)")
     .eq("student_id", studentId)
     .order("created_at", { ascending: false });
-  return data ?? [];
+  return ((data as (Purchase & { notes: Note | null })[]) ?? []);
 }
 
 export async function addPurchase(
@@ -107,8 +138,11 @@ export async function addPurchase(
 /* ─── Bookmarks ───────────────────────────────────────────── */
 
 export async function getBookmarkedNoteIds(studentId: string): Promise<number[]> {
-  const { data } = await supabase.from("bookmarks").select("note_id").eq("student_id", studentId);
-  return (data ?? []).map((b) => b.note_id);
+  const { data } = await supabase
+    .from("bookmarks")
+    .select("note_id")
+    .eq("student_id", studentId);
+  return ((data as { note_id: number }[]) ?? []).map((b) => b.note_id);
 }
 
 export async function toggleBookmarkDB(
@@ -123,7 +157,7 @@ export async function toggleBookmarkDB(
     .maybeSingle();
 
   if (existing) {
-    const { error } = await supabase.from("bookmarks").delete().eq("id", existing.id);
+    const { error } = await supabase.from("bookmarks").delete().eq("id", (existing as { id: number }).id);
     return { bookmarked: false, error: error?.message };
   } else {
     const { error } = await supabase
@@ -140,24 +174,16 @@ export async function getAllProfiles(): Promise<Profile[]> {
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: false });
-  return data ?? [];
+  return ((data as Profile[]) ?? []);
 }
 
-export async function banProfile(userId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from("profiles")
-    .update({ role: "student" })
-    .eq("id", userId);
-  return !error;
-}
-
-export async function getPendingScholars() {
+export async function getPendingScholars(): Promise<ScholarApproval[]> {
   const { data } = await supabase
     .from("scholar_approvals")
     .select("*")
     .eq("status", "pending")
     .order("submitted_at", { ascending: false });
-  return data ?? [];
+  return ((data as ScholarApproval[]) ?? []);
 }
 
 export async function updateScholarApproval(
