@@ -288,6 +288,15 @@ export default function Admin() {
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 shrink-0">
+                          {item.fileUrl && (
+                            <a
+                              href={item.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-5 py-2.5 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs font-bold hover:bg-blue-600/30 transition whitespace-nowrap text-center">
+                              Preview File
+                            </a>
+                          )}
                           <button
                             onClick={() => handleApprove(item.id)}
                             disabled={actioning === item.id}
