@@ -250,8 +250,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = useCallback(
     async (user: User) => {
-      // Set currentUser immediately from JWT metadata — no network call required.
-      // This means the user can navigate even if Supabase DB calls hang.
       const fallbackName =
         (user.user_metadata?.name as string | undefined) ??
         user.email?.split("@")[0] ??
@@ -260,6 +258,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         (user.user_metadata?.role as "student" | "scholar" | "admin" | undefined) ??
         "student";
 
+      // Set a preliminary state so the UI has something while we load the DB profile
       setCurrentUser({
         id: user.id,
         name: fallbackName,
@@ -268,25 +267,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       setRole(fallbackRole);
 
-      // Enrich with DB profile + role data in the background — don't block UI on it
-      (async () => {
-        try {
-          let profile = await getProfile(user.id);
-          if (!profile) {
-            profile = await upsertProfile({
-              id: user.id,
-              name: fallbackName,
-              email: user.email ?? null,
-              role: fallbackRole === "admin" ? "student" : fallbackRole,
-              expertise:
-                (user.user_metadata?.expertise as string | undefined) ?? null,
-            });
-          }
-          if (profile) await applyProfile(profile);
-        } catch (err) {
-          console.warn("Background profile enrichment failed:", err);
+      // ── Always await the DB profile before returning so that RequireAuth
+      // only evaluates after the true role (e.g. "admin") is known.
+      try {
+        let profile = await getProfile(user.id);
+        if (!profile) {
+          profile = await upsertProfile({
+            id: user.id,
+            name: fallbackName,
+            email: user.email ?? null,
+            role: fallbackRole === "admin" ? "student" : fallbackRole,
+            expertise:
+              (user.user_metadata?.expertise as string | undefined) ?? null,
+          });
         }
-      })();
+        if (profile) await applyProfile(profile);
+      } catch (err) {
+        console.warn("Profile load failed:", err);
+      }
     },
     [applyProfile],
   );

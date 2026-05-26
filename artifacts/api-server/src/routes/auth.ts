@@ -463,6 +463,28 @@ router.post("/auth/verify-phone-otp", async (req, res) => {
   const { session: existingSession } = await supabaseLogin(pEmail, pPw);
   if (existingSession) {
     req.log.info({ phone: normalized }, "Phone login — existing user");
+
+    // Sync JWT metadata with DB profile role so the client always gets the
+    // true role (e.g. "admin") in the token, not the stale signup-time role.
+    try {
+      const { data: profileRow } = await adminClient
+        .from("profiles")
+        .select("role")
+        .eq("id", existingSession.user.id)
+        .single();
+      if (profileRow?.role && profileRow.role !== existingSession.user.user_metadata?.role) {
+        await adminClient.auth.admin.updateUserById(existingSession.user.id, {
+          user_metadata: {
+            ...existingSession.user.user_metadata,
+            role: profileRow.role,
+          },
+        });
+        req.log.info({ userId: existingSession.user.id, role: profileRow.role }, "JWT metadata synced with profile role");
+      }
+    } catch (syncErr) {
+      req.log.warn({ syncErr }, "Failed to sync JWT metadata — non-fatal");
+    }
+
     res.json({ success: true, session: existingSession });
     return;
   }
