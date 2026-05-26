@@ -44,7 +44,10 @@ function RequireAuth({ children, requiredRole }: { children: React.ReactNode; re
     }
   }, [shouldRedirect, requiredRole, setLocation]);
 
-  if (loading) {
+  // Only block rendering on initial load (no user yet).
+  // Background reloads (TOKEN_REFRESHED, etc.) must never unmount children —
+  // that would wipe local component state like selectedFile in Upload.
+  if (loading && !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#070709]">
         <div className="w-8 h-8 border-2 border-white/20 border-t-violet-500 rounded-full animate-spin" />

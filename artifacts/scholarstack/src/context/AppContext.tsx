@@ -311,16 +311,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       // Intentionally NOT async — Supabase v2 awaits the callback's returned
       // Promise inside setSession(), so an async callback blocks applySession()
       // on slow networks. Returning void makes setSession() resolve immediately
       // while loadUser() still runs in the background.
       if (session?.user) {
-        // Re-arm the loading flag so RequireAuth shows a spinner instead of
-        // bouncing — loading was already set false by the initial getSession()
-        // call (which found no session), so we must raise it again here.
-        setLoading(true);
+        // Only show the full-page loading spinner for a genuine new sign-in.
+        // TOKEN_REFRESHED / INITIAL_SESSION fire when the window regains focus
+        // (e.g. after closing a file picker) — raising loading for those events
+        // would unmount the current page and wipe local state like selectedFile.
+        if (event === "SIGNED_IN") {
+          setLoading(true);
+        }
         void loadUser(session.user).finally(() => setLoading(false));
       } else {
         setCurrentUser(null);
