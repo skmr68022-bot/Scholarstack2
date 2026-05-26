@@ -238,10 +238,18 @@ export default function NoteDetail() {
       {/* Action buttons */}
       <div className="flex gap-3 mb-8">
         {isPurchased || isFree ? (
-          <button onClick={() => setShowPdf(true)}
-            className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-sm hover:opacity-90 transition shadow-lg">
-            {isFree ? "Read Free →" : "Read Now →"}
-          </button>
+          <div className="flex flex-1 gap-2">
+            <button onClick={() => setShowPdf(true)}
+              className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-sm hover:opacity-90 transition shadow-lg">
+              {isFree ? "Read Free →" : "Read Now →"}
+            </button>
+            {note.fileUrl && (
+              <a href={note.fileUrl} target="_blank" rel="noopener noreferrer"
+                className="px-4 py-3.5 rounded-2xl bg-white/10 border border-white/15 text-white text-sm font-semibold hover:bg-white/15 transition flex items-center gap-1.5">
+                Download PDF
+              </a>
+            )}
+          </div>
         ) : (
           <button onClick={() => setShowPayModal(true)}
             className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold text-sm hover:opacity-90 transition shadow-lg hover:scale-[1.01]">
@@ -360,31 +368,52 @@ export default function NoteDetail() {
 
       {/* ── PDF Viewer Modal ── */}
       {showPdf && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex flex-col" onClick={() => setShowPdf(false)}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0d0d12]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0d0d12] shrink-0">
             <div>
               <p className="font-bold text-sm text-white">{note.title}</p>
-              <p className="text-[10px] text-gray-400">Page {pdfPage + 1} of {pdfPages.length}</p>
+              <p className="text-[10px] text-gray-400">{note.scholar}</p>
             </div>
-            <button onClick={() => setShowPdf(false)} className="text-gray-400 hover:text-white text-2xl">×</button>
-          </div>
-          <div className="flex-1 overflow-auto p-8" onClick={e => e.stopPropagation()}>
-            <div className="max-w-2xl mx-auto bg-white rounded-2xl p-8 shadow-2xl">
-              <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-mono">{pdfPages[pdfPage]}</pre>
+            <div className="flex items-center gap-3">
+              {note.fileUrl && (
+                <a href={note.fileUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 rounded-lg px-3 py-1.5 transition">
+                  Open in new tab
+                </a>
+              )}
+              <button onClick={() => setShowPdf(false)} className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
             </div>
           </div>
-          <div className="flex items-center justify-center gap-4 py-4 border-t border-white/10 bg-[#0d0d12]" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPdfPage(p => Math.max(0, p - 1))} disabled={pdfPage === 0}
-              className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm disabled:opacity-40">← Prev</button>
-            <div className="flex gap-1.5">
-              {pdfPages.map((_, i) => (
-                <button key={i} onClick={() => setPdfPage(i)}
-                  className={`w-2 h-2 rounded-full transition ${i === pdfPage ? "bg-violet-400" : "bg-white/20"}`} />
-              ))}
-            </div>
-            <button onClick={() => setPdfPage(p => Math.min(pdfPages.length - 1, p + 1))} disabled={pdfPage === pdfPages.length - 1}
-              className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm disabled:opacity-40">Next →</button>
-          </div>
+
+          {note.fileUrl ? (
+            /* Real PDF — render in iframe */
+            <iframe
+              src={note.fileUrl}
+              className="flex-1 w-full border-0 bg-white"
+              title={note.title}
+            />
+          ) : (
+            /* No file uploaded — show placeholder text pages */
+            <>
+              <div className="flex-1 overflow-auto p-8">
+                <div className="max-w-2xl mx-auto bg-white rounded-2xl p-8 shadow-2xl">
+                  <pre className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap font-mono">{pdfPages[pdfPage]}</pre>
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-4 py-4 border-t border-white/10 bg-[#0d0d12] shrink-0">
+                <button onClick={() => setPdfPage(p => Math.max(0, p - 1))} disabled={pdfPage === 0}
+                  className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm disabled:opacity-40">← Prev</button>
+                <div className="flex gap-1.5">
+                  {pdfPages.map((_, i) => (
+                    <button key={i} onClick={() => setPdfPage(i)}
+                      className={`w-2 h-2 rounded-full transition ${i === pdfPage ? "bg-violet-400" : "bg-white/20"}`} />
+                  ))}
+                </div>
+                <button onClick={() => setPdfPage(p => Math.min(pdfPages.length - 1, p + 1))} disabled={pdfPage === pdfPages.length - 1}
+                  className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm disabled:opacity-40">Next →</button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
