@@ -300,9 +300,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Intentionally NOT async — Supabase v2 awaits the callback's returned
+      // Promise inside setSession(), so an async callback blocks applySession()
+      // on slow networks. Returning void makes setSession() resolve immediately
+      // while loadUser() still runs in the background.
       if (session?.user) {
-        await loadUser(session.user);
+        void loadUser(session.user).finally(() => setLoading(false));
       } else {
         setCurrentUser(null);
         setRole(null);
@@ -311,8 +315,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUploads([]);
         setPendingScholars([]);
         setUsers([]);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
