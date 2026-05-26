@@ -80,7 +80,7 @@ export default function Auth() {
     const trimPw    = pw.trim();
     const trimName  = name.trim();
 
-    if (mode === "login" || isAdmin) {
+    if (mode === "login") {
       if (!trimEmail || !trimPw) { setError("Please fill in all fields."); return; }
       setLoading(true);
       const result = await withTimeout(
@@ -94,11 +94,11 @@ export default function Auth() {
       return;
     }
 
-    /* Signup */
+    /* Signup (including admin signup) */
     if (!trimName || !trimEmail || !trimPw) { setError("Please fill in all fields."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimEmail)) { setError("Please enter a valid email address."); return; }
     if (trimPw.length < 6) { setError("Password must be at least 6 characters."); return; }
-    if (!agreed) { setError("Please agree to the Terms & Privacy Policy."); return; }
+    if (!isAdmin && !agreed) { setError("Please agree to the Terms & Privacy Policy."); return; }
 
     setLoading(true);
     const result = await withTimeout(
@@ -111,7 +111,9 @@ export default function Auth() {
     if (result.success) {
       setPendingEmail(trimEmail);
       setStep("email_otp");
-      setInfo("A 6-digit verification code has been sent to your email.");
+      setInfo(isAdmin
+        ? "Account created! Enter the verification code sent to your email. After verifying, run the SQL below in Supabase to grant admin access."
+        : "A 6-digit verification code has been sent to your email.");
     } else {
       setError(friendlyError(result.error ?? "Signup failed. Please try again."));
     }
@@ -450,10 +452,13 @@ export default function Auth() {
           {step === "form" && (
             <>
               <h2 className="text-2xl font-black text-white mb-1">
-                {isAdmin ? "Admin Login" : mode === "signup" ? `Join as ${roleLabel}` : "Welcome back!"}
+                {isAdmin
+                  ? (mode === "signup" ? "Create Admin Account" : "Admin Login")
+                  : mode === "signup" ? `Join as ${roleLabel}` : "Welcome back!"}
               </h2>
               <p className="text-sm text-gray-400 mb-6">
-                {isAdmin ? "Enter your admin credentials"
+                {isAdmin
+                  ? (mode === "signup" ? "Create your account, then grant admin access via SQL" : "Enter your admin credentials")
                   : mode === "signup" ? "Create your free account — takes 10 seconds"
                   : "Sign in to continue"}
               </p>
@@ -517,19 +522,17 @@ export default function Auth() {
               {/* ── Email / Admin tab ── */}
               {(tab === "email" || isAdmin) && (
                 <div className="space-y-4">
-                  {/* Sign up / Sign in toggle */}
-                  {!isAdmin && (
-                    <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
-                      {(["signup", "login"] as AuthMode[]).map(m => (
-                        <button key={m} onClick={() => switchMode(m)}
-                          className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${mode === m ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
-                          {m === "signup" ? "New Account" : "Sign In"}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* Sign up / Sign in toggle — shown for everyone including admin */}
+                  <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+                    {(["login", "signup"] as AuthMode[]).map(m => (
+                      <button key={m} onClick={() => switchMode(m)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition ${mode === m ? `bg-gradient-to-r ${accent} text-white` : "text-gray-400 hover:text-white"}`}>
+                        {m === "signup" ? (isAdmin ? "Create Account" : "New Account") : "Sign In"}
+                      </button>
+                    ))}
+                  </div>
 
-                  {mode === "signup" && !isAdmin && (
+                  {mode === "signup" && (
                     <div>
                       <label className="text-xs text-gray-400 font-semibold block mb-2">Full Name</label>
                       <input value={name} onChange={e => { setName(e.target.value); setError(""); }}
@@ -555,8 +558,7 @@ export default function Auth() {
                         {showPw ? "Hide" : "Show"}
                       </button>
                     </div>
-                    {/* Forgot password link — shown on Sign In tab and admin login */}
-                    {(mode === "login" || isAdmin) && (
+                    {mode === "login" && (
                       <button
                         onClick={() => { setStep("forgot_email"); setForgotEmail(email); setError(""); setInfo(""); }}
                         className={`mt-1.5 text-xs ${accentText} hover:underline float-right`}>
@@ -592,14 +594,24 @@ export default function Auth() {
                     className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg disabled:opacity-60`}>
                     {loading
                       ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{mode === "signup" ? "Creating account…" : "Signing in…"}</span>
-                      : mode === "login" || isAdmin ? "Sign In →" : `Create ${roleLabel} Account →`}
+                      : mode === "login" ? "Sign In →" : `Create Account →`}
                   </button>
 
-                  {isAdmin && (
-                    <p className="text-xs text-gray-500 text-center leading-relaxed">
-                      First sign up via the Student/Scholar flow, then run
-                      <br /><code className="text-gray-400 text-[10px]">UPDATE profiles SET role = 'admin' WHERE email = '...';</code>
-                      <br />in Supabase SQL Editor to grant admin access.
+                  {isAdmin && mode === "signup" && (
+                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 space-y-1.5">
+                      <p className="text-xs text-gray-400 font-semibold">After verifying your email:</p>
+                      <p className="text-xs text-gray-500">Run this in Supabase SQL Editor to grant admin access:</p>
+                      <code className="block text-[10px] text-orange-300 bg-black/30 rounded-lg px-3 py-2 leading-relaxed break-all">
+                        {"UPDATE profiles SET role = 'admin' WHERE email = 'your@email.com';"}
+                      </code>
+                      <p className="text-xs text-gray-500">Then sign in above with those credentials.</p>
+                    </div>
+                  )}
+
+                  {isAdmin && mode === "login" && (
+                    <p className="text-xs text-gray-500 text-center">
+                      No account yet?{" "}
+                      <button onClick={() => switchMode("signup")} className={`${accentText} hover:underline`}>Create one above</button>
                     </p>
                   )}
                 </div>
