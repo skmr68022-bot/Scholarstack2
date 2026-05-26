@@ -25,41 +25,35 @@ interface PhoneOtpEntry {
 }
 const phoneOtpStore = new Map<string, PhoneOtpEntry>();
 
+/* ── In-memory store for password reset OTPs (TTL: 10 min) ── */
+interface ForgotPwEntry {
+  otp: string;
+  userId: string;
+  expiry: number;
+}
+const forgotPwStore = new Map<string, ForgotPwEntry>();
+
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of emailOtpStore.entries()) { if (v.expiry < now) emailOtpStore.delete(k); }
   for (const [k, v] of phoneOtpStore.entries()) { if (v.expiry < now) phoneOtpStore.delete(k); }
+  for (const [k, v] of forgotPwStore.entries())  { if (v.expiry < now) forgotPwStore.delete(k); }
 }, 60_000);
 
-/* ── Send email via Resend (falls back to console log for dev) ── */
-async function sendOtpEmail(to: string, otp: string, name: string): Promise<boolean> {
+/* ── Send email via Resend ── */
+async function sendResendEmail(to: string, subject: string, html: string): Promise<boolean> {
   const apiKey = process.env["RESEND_API_KEY"];
-
   if (!apiKey) {
-    // Dev fallback — print OTP to server console
     console.log(`\n╔══════════════════════════════════╗`);
-    console.log(`  EMAIL OTP for ${to}`);
-    console.log(`  Code: ${otp}`);
+    console.log(`  EMAIL to ${to}: ${subject}`);
     console.log(`╚══════════════════════════════════╝\n`);
     return true;
   }
-
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "ScholarStack <onboarding@resend.dev>",
-        to: [to],
-        subject: "Your ScholarStack verification code",
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d0d12;border-radius:16px;color:#fff">
-            <h2 style="margin:0 0 8px;font-size:22px">Hi ${name},</h2>
-            <p style="color:#aaa;margin:0 0 24px">Your ScholarStack verification code is:</p>
-            <div style="background:#1a1a2e;border-radius:12px;padding:24px;text-align:center;letter-spacing:12px;font-size:36px;font-weight:900;color:#7c3aed">${otp}</div>
-            <p style="color:#666;font-size:13px;margin:24px 0 0">This code expires in 10 minutes. Do not share it with anyone.</p>
-          </div>`,
-      }),
+      body: JSON.stringify({ from: "ScholarStack <onboarding@resend.dev>", to: [to], subject, html }),
     });
     if (!res.ok) {
       const errBody = await res.text();
@@ -71,6 +65,32 @@ async function sendOtpEmail(to: string, otp: string, name: string): Promise<bool
     console.error(`[Resend] fetch error:`, e);
     return false;
   }
+}
+
+async function sendOtpEmail(to: string, otp: string, name: string): Promise<boolean> {
+  return sendResendEmail(
+    to,
+    "Your ScholarStack verification code",
+    `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d0d12;border-radius:16px;color:#fff">
+      <h2 style="margin:0 0 8px;font-size:22px">Hi ${name},</h2>
+      <p style="color:#aaa;margin:0 0 24px">Your ScholarStack verification code is:</p>
+      <div style="background:#1a1a2e;border-radius:12px;padding:24px;text-align:center;letter-spacing:12px;font-size:36px;font-weight:900;color:#7c3aed">${otp}</div>
+      <p style="color:#666;font-size:13px;margin:24px 0 0">This code expires in 10 minutes. Do not share it with anyone.</p>
+    </div>`,
+  );
+}
+
+async function sendResetEmail(to: string, otp: string): Promise<boolean> {
+  return sendResendEmail(
+    to,
+    "Reset your ScholarStack password",
+    `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d0d12;border-radius:16px;color:#fff">
+      <h2 style="margin:0 0 8px;font-size:22px">Password Reset</h2>
+      <p style="color:#aaa;margin:0 0 24px">Use the code below to reset your ScholarStack password:</p>
+      <div style="background:#1a1a2e;border-radius:12px;padding:24px;text-align:center;letter-spacing:12px;font-size:36px;font-weight:900;color:#7c3aed">${otp}</div>
+      <p style="color:#666;font-size:13px;margin:24px 0 0">This code expires in 10 minutes. If you didn't request a reset, ignore this email.</p>
+    </div>`,
+  );
 }
 
 /* ── Helpers ── */
@@ -477,6 +497,117 @@ router.post("/auth/verify-phone-otp", async (req, res) => {
   }
 
   req.log.info({ phone: normalized, userId }, "Phone signup + login successful");
+  res.json({ success: true, session });
+});
+
+/* ════════════════════════════════════════════════════════════
+   POST /auth/forgot-password
+   Generates a 6-digit OTP and emails it to the user.
+   Always returns success to prevent email enumeration.
+   ════════════════════════════════════════════════════════════ */
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) {
+    res.status(400).json({ success: false, error: "Email is required." });
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const adminClient = getAdminClient();
+  if (!adminClient) {
+    res.status(503).json({ success: false, error: "Server configuration error." });
+    return;
+  }
+
+  // Find user by email
+  const listResult = await adminClient.auth.admin.listUsers();
+  const user = (listResult.data?.users as Array<{ email?: string; id: string }> | undefined)
+    ?.find(u => u.email === normalizedEmail);
+
+  // Always return success to prevent email enumeration
+  if (!user) {
+    req.log.info({ email: normalizedEmail }, "Forgot password: email not found (silent)");
+    res.json({ success: true });
+    return;
+  }
+
+  const otp = String(randomInt(100000, 999999));
+  forgotPwStore.set(normalizedEmail, { otp, userId: user.id, expiry: Date.now() + 10 * 60_000 });
+
+  const sent = await sendResetEmail(normalizedEmail, otp);
+  if (!sent) {
+    forgotPwStore.delete(normalizedEmail);
+    res.status(500).json({ success: false, error: "Failed to send reset email. Please try again." });
+    return;
+  }
+
+  req.log.info({ email: normalizedEmail }, "Password reset OTP sent");
+  res.json({ success: true });
+});
+
+/* ════════════════════════════════════════════════════════════
+   POST /auth/reset-password
+   Verifies the OTP, updates the password via admin API,
+   and returns a new session so the user is auto-signed-in.
+   ════════════════════════════════════════════════════════════ */
+router.post("/auth/reset-password", async (req, res) => {
+  const { email, token, newPassword } = req.body as {
+    email?: string; token?: string; newPassword?: string;
+  };
+
+  if (!email || !token || !newPassword) {
+    res.status(400).json({ success: false, error: "Email, code, and new password are required." });
+    return;
+  }
+  if (newPassword.trim().length < 6) {
+    res.status(400).json({ success: false, error: "Password must be at least 6 characters." });
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const pending = forgotPwStore.get(normalizedEmail);
+
+  if (!pending) {
+    res.status(400).json({ success: false, error: "No reset request found. Please request a new code." });
+    return;
+  }
+  if (pending.expiry < Date.now()) {
+    forgotPwStore.delete(normalizedEmail);
+    res.status(400).json({ success: false, error: "Reset code has expired. Please request a new one." });
+    return;
+  }
+  if (token.trim() !== pending.otp) {
+    res.status(400).json({ success: false, error: "Incorrect code. Please try again." });
+    return;
+  }
+
+  forgotPwStore.delete(normalizedEmail);
+
+  const adminClient = getAdminClient();
+  if (!adminClient) {
+    res.status(503).json({ success: false, error: "Server configuration error." });
+    return;
+  }
+
+  const { error: updateErr } = await adminClient.auth.admin.updateUserById(pending.userId, {
+    password: newPassword.trim(),
+  });
+
+  if (updateErr) {
+    req.log.error({ error: updateErr.message }, "reset-password updateUserById failed");
+    res.status(400).json({ success: false, error: updateErr.message });
+    return;
+  }
+
+  // Auto sign-in with the new password
+  const { session, error: loginErr } = await supabaseLogin(normalizedEmail, newPassword.trim());
+  if (!session) {
+    req.log.warn({ loginErr }, "reset-password: password updated but auto-login failed");
+    res.json({ success: true });
+    return;
+  }
+
+  req.log.info({ userId: pending.userId }, "Password reset successful");
   res.json({ success: true, session });
 });
 

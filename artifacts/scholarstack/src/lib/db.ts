@@ -40,6 +40,7 @@ export async function getNotes(filters?: {
   scholarId?: string;
   boardType?: string;
   exam?: string;
+  contentType?: string;
 }): Promise<Note[]> {
   let q = supabase.from("notes").select("*");
   if (filters?.category) q = q.eq("category", filters.category);
@@ -47,8 +48,18 @@ export async function getNotes(filters?: {
   if (filters?.scholarId) q = q.eq("scholar_id", filters.scholarId);
   if (filters?.boardType) q = q.eq("board_type", filters.boardType);
   if (filters?.exam) q = q.eq("exam", filters.exam);
+  if (filters?.contentType) q = q.eq("content_type", filters.contentType);
   const { data } = await q.order("sales_count", { ascending: false });
   return ((data as Note[]) ?? []);
+}
+
+export async function getScholarProfiles(limit = 6): Promise<Profile[]> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "scholar")
+    .limit(limit);
+  return ((data as Profile[]) ?? []);
 }
 
 export async function getNoteById(id: number): Promise<Note | null> {
