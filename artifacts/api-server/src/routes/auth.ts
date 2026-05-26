@@ -117,12 +117,16 @@ async function mcSendOtp(phone: string, token: string): Promise<string | null> {
   if (!cid) return null;
   try {
     const res = await fetch(
-      `https://cpaas.messagecentral.com/verification/v3/send?countryCode=91&customerId=${cid}&flowType=SMS&mobileNumber=${phone}&otpLength=6&type=SMS`,
+      `https://cpaas.messagecentral.com/verification/v3/send?countryCode=91&customerId=${cid}&flowType=SMS&mobileNumber=${phone}`,
       { method: "POST", headers: { authToken: token } },
     );
-    const d = await res.json() as { data?: { verificationId?: string }; verificationId?: string };
-    return String(d.data?.verificationId ?? (d as Record<string, unknown>)["verificationId"] ?? "") || null;
-  } catch { return null; }
+    const d = await res.json() as { data?: { verificationId?: string }; responseCode?: number; message?: string };
+    console.log(`[MC SendOTP] status=${res.status} body=${JSON.stringify(d)}`);
+    return String(d.data?.verificationId ?? "") || null;
+  } catch (e) {
+    console.error(`[MC SendOTP] error:`, e);
+    return null;
+  }
 }
 
 async function mcVerifyOtp(verificationId: string, code: string, token: string): Promise<boolean> {
