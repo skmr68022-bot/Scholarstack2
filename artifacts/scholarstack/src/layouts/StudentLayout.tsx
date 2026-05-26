@@ -3,9 +3,7 @@ import { useLocation } from "wouter";
 
 const navItems = [
   { icon: "⌂", label: "Home", path: "/student" },
-  { icon: "◉", label: "Browse Notes", path: "/student/notes" },
-  { icon: "🎓", label: "University Notes", path: "/student/university" },
-  { icon: "📚", label: "Board Notes", path: "/student/board" },
+  { icon: "◉", label: "Browse", path: "/student/browse" },
   { icon: "▶", label: "Reels", path: "/student/reels" },
   { icon: "▣", label: "My Library", path: "/student/library" },
   { icon: "✦", label: "AI Tutor", path: "/student/ai" },

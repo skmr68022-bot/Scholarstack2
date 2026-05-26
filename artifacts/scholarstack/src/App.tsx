@@ -12,10 +12,8 @@ import Admin from "./pages/Admin";
 
 import StudentLayout from "./layouts/StudentLayout";
 import StudentHome from "./pages/student/Home";
-import Notes from "./pages/student/Notes";
+import Browse from "./pages/student/Browse";
 import NoteDetail from "./pages/student/NoteDetail";
-import UniversityNotes from "./pages/student/UniversityNotes";
-import BoardNotes from "./pages/student/BoardNotes";
 import Reels from "./pages/student/Reels";
 import Library from "./pages/student/Library";
 import AiTutor from "./pages/student/AiTutor";
@@ -60,10 +58,8 @@ function StudentRoutes() {
       <StudentLayout>
         <Switch>
           <Route path="/student" component={StudentHome} />
-          <Route path="/student/notes" component={Notes} />
+          <Route path="/student/browse" component={Browse} />
           <Route path="/student/notes/:id" component={NoteDetail} />
-          <Route path="/student/university" component={UniversityNotes} />
-          <Route path="/student/board" component={BoardNotes} />
           <Route path="/student/reels" component={Reels} />
           <Route path="/student/library" component={Library} />
           <Route path="/student/ai" component={AiTutor} />

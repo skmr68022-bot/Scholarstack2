@@ -59,11 +59,11 @@ export default function StudentHome() {
       <h2 className="font-bold text-sm text-white mb-3">Browse by Category</h2>
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
-          { label: "Competitive Exams", icon: "🏆", path: "/student/notes", desc: "UPSC, NEET, JEE, SSC", gradient: "from-violet-600 to-indigo-600" },
-          { label: "University Notes", icon: "🎓", path: "/student/university", desc: "DU, Mumbai, Anna & more", gradient: "from-blue-600 to-cyan-600" },
-          { label: "Board Exams", icon: "📚", path: "/student/board", desc: "CBSE, CISCE, State Boards", gradient: "from-green-600 to-teal-600" },
+          { label: "Govt & Competitive", icon: "🏆", desc: "UPSC, NEET, JEE, SSC", gradient: "from-violet-600 to-indigo-600" },
+          { label: "University", icon: "🎓", desc: "DU, Mumbai, Anna & more", gradient: "from-blue-600 to-cyan-600" },
+          { label: "Board Exams", icon: "📚", desc: "CBSE, CISCE, State Boards", gradient: "from-green-600 to-teal-600" },
         ].map(s => (
-          <button key={s.label} onClick={() => setLocation(s.path)}
+          <button key={s.label} onClick={() => setLocation("/student/browse")}
             className="bg-[#13131a] border border-white/8 rounded-2xl p-4 text-left hover:border-violet-500/30 hover:bg-white/3 transition group">
             <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center text-xl mb-3`}>{s.icon}</div>
             <div className="font-bold text-xs text-white mb-0.5">{s.label}</div>
