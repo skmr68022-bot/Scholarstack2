@@ -161,7 +161,19 @@ router.post("/auth/signup", async (req, res) => {
     );
   }
 
-  req.log.info({ userId, role }, "User created — awaiting email OTP verification");
+  // Explicitly send OTP email (works even when Supabase "Confirm email" is disabled)
+  const otpRes = await fetch(`${process.env["SUPABASE_URL"]}/auth/v1/otp`, {
+    method: "POST",
+    headers: { apikey: process.env["SUPABASE_ANON_KEY"]!, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: normalizedEmail, create_user: false }),
+  });
+  if (!otpRes.ok) {
+    const otpErr = await otpRes.json() as { error?: string; error_description?: string; msg?: string };
+    req.log.error({ otpErr }, "Failed to send OTP email after user creation");
+    // Don't fail the signup — user exists, just warn
+  }
+
+  req.log.info({ userId, role }, "User created — OTP email triggered");
   res.json({ success: true, requiresOtp: true, userId });
 });
 
@@ -234,7 +246,7 @@ router.post("/auth/verify-email-otp", async (req, res) => {
   const response = await fetch(`${url}/auth/v1/verify`, {
     method: "POST",
     headers: { apikey: anonKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "signup", email: email.trim().toLowerCase(), token: token.trim() }),
+    body: JSON.stringify({ type: "email", email: email.trim().toLowerCase(), token: token.trim() }),
   });
 
   const data = await response.json() as {
