@@ -326,6 +326,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!json.success || !json.session) {
         return { success: false, error: json.error ?? "Login failed." };
       }
+      // Validate role from JWT metadata before accepting the session
+      const sessionRole = (json.session.user as { user_metadata?: { role?: string } })?.user_metadata?.role;
+      if (_loginRole !== "admin" && sessionRole && sessionRole !== _loginRole) {
+        return {
+          success: false,
+          error: `This account is registered as a ${sessionRole}. Please go to the ${sessionRole} sign-in page, or create a new account here.`,
+        };
+      }
       // Write session directly to Supabase localStorage (bypasses setSession's getUser network call)
       window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
       return { success: true };
