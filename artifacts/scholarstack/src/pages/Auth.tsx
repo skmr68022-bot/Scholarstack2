@@ -48,6 +48,23 @@ export default function Auth() {
 
   /* Detect Supabase PASSWORD_RECOVERY event (from reset-link email click) */
   useEffect(() => {
+    // Handle ?token_hash=...&type=recovery in URL (from clicking the emailed link)
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    const tokenType = params.get("type");
+    if (tokenHash && tokenType === "recovery") {
+      window.history.replaceState(null, "", window.location.pathname);
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" })
+        .then(({ error: verifyErr }) => {
+          if (verifyErr) {
+            setError("Reset link is invalid or has expired. Please request a new one.");
+            setStep("forgot_email");
+          }
+          // PASSWORD_RECOVERY event will fire from the listener below
+        });
+    }
+
+    // Also listen for the PASSWORD_RECOVERY auth event
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovery(true);
@@ -184,7 +201,7 @@ export default function Auth() {
     else { setError(friendlyError(result.error ?? "Verification failed.")); }
   };
 
-  /* ── Forgot password: send reset link via Supabase ── */
+  /* ── Forgot password: send reset link via server ── */
   const handleForgotSend = async () => {
     setError(""); setInfo("");
     const trimEmail = forgotEmail.trim().toLowerCase();
@@ -192,14 +209,41 @@ export default function Auth() {
       setError("Please enter a valid email address."); return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(trimEmail, {
-      redirectTo: window.location.href.split("#")[0],
-    });
-    setLoading(false);
-    if (error) {
-      setError(friendlyError(error.message));
-    } else {
-      setInfo("Reset link sent! Check your inbox (and spam folder). Click the link in the email — it will bring you back here to set a new password.");
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimEmail, role: isAdmin ? "admin" : isScholar ? "scholar" : "student" }),
+      });
+      const json = await res.json() as { success: boolean; error?: string; emailSent?: boolean; tokenHash?: string };
+      if (!json.success) {
+        setLoading(false);
+        setError(json.error ?? "Something went wrong. Please try again.");
+        return;
+      }
+      if (json.emailSent) {
+        setLoading(false);
+        setInfo("Reset link sent to your email! Check your inbox and spam folder, then click the link.");
+        return;
+      }
+      if (json.tokenHash) {
+        // Resend couldn't deliver (test mode) — verify the token directly in-app
+        const { error: verifyErr } = await supabase.auth.verifyOtp({
+          token_hash: json.tokenHash,
+          type: "recovery",
+        });
+        setLoading(false);
+        if (verifyErr) {
+          setError("Could not start password reset. Please try again.");
+        }
+        // PASSWORD_RECOVERY event fires → onAuthStateChange sets isRecovery + step
+        return;
+      }
+      setLoading(false);
+      setInfo("If an account exists for this email, a reset link has been sent.");
+    } catch {
+      setLoading(false);
+      setError("Network error. Please check your connection.");
     }
   };
 

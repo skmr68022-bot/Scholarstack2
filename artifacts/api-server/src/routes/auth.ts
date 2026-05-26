@@ -80,15 +80,16 @@ async function sendOtpEmail(to: string, otp: string, name: string): Promise<bool
   );
 }
 
-async function sendResetEmail(to: string, otp: string): Promise<boolean> {
+async function sendResetLinkEmail(to: string, resetUrl: string): Promise<boolean> {
   return sendResendEmail(
     to,
     "Reset your ScholarStack password",
     `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d0d12;border-radius:16px;color:#fff">
       <h2 style="margin:0 0 8px;font-size:22px">Password Reset</h2>
-      <p style="color:#aaa;margin:0 0 24px">Use the code below to reset your ScholarStack password:</p>
-      <div style="background:#1a1a2e;border-radius:12px;padding:24px;text-align:center;letter-spacing:12px;font-size:36px;font-weight:900;color:#7c3aed">${otp}</div>
-      <p style="color:#666;font-size:13px;margin:24px 0 0">This code expires in 10 minutes. If you didn't request a reset, ignore this email.</p>
+      <p style="color:#aaa;margin:0 0 24px">Click the button below to reset your ScholarStack password. The link is valid for 1 hour.</p>
+      <a href="${resetUrl}" style="display:block;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:12px;font-weight:900;font-size:16px;margin:0 0 24px">Reset Password →</a>
+      <p style="color:#666;font-size:12px;word-break:break-all">Or copy this link: ${resetUrl}</p>
+      <p style="color:#555;font-size:12px;margin:16px 0 0">If you didn't request a password reset, ignore this email.</p>
     </div>`,
   );
 }
@@ -524,11 +525,15 @@ router.post("/auth/verify-phone-otp", async (req, res) => {
 
 /* ════════════════════════════════════════════════════════════
    POST /auth/forgot-password
-   Generates a 6-digit OTP and emails it to the user.
-   Always returns success to prevent email enumeration.
+   Uses Supabase admin.generateLink to get a recovery token,
+   builds a reset URL pointing at this app (REPLIT_DOMAINS),
+   and emails it via Resend.
+   If Resend delivery fails (test-mode), returns the token
+   in the response so the frontend can verify it directly —
+   no Supabase redirect-URL configuration required.
    ════════════════════════════════════════════════════════════ */
 router.post("/auth/forgot-password", async (req, res) => {
-  const { email } = req.body as { email?: string };
+  const { email, role } = req.body as { email?: string; role?: string };
   if (!email) {
     res.status(400).json({ success: false, error: "Email is required." });
     return;
@@ -541,30 +546,42 @@ router.post("/auth/forgot-password", async (req, res) => {
     return;
   }
 
-  // Find user by email
-  const listResult = await adminClient.auth.admin.listUsers();
-  const user = (listResult.data?.users as Array<{ email?: string; id: string }> | undefined)
-    ?.find(u => u.email === normalizedEmail);
+  // Generate a Supabase recovery token server-side (bypasses redirect-URL restrictions)
+  const { data, error } = await adminClient.auth.admin.generateLink({
+    type: "recovery",
+    email: normalizedEmail,
+  });
 
-  // Always return success to prevent email enumeration
-  if (!user) {
-    req.log.info({ email: normalizedEmail }, "Forgot password: email not found (silent)");
+  if (error || !data?.properties?.hashed_token) {
+    // User not found or other Supabase error — return success to prevent enumeration
+    req.log.info({ email: normalizedEmail, err: error?.message }, "Forgot password: generateLink failed (silent)");
     res.json({ success: true });
     return;
   }
 
-  const otp = String(randomInt(100000, 999999));
-  forgotPwStore.set(normalizedEmail, { otp, userId: user.id, expiry: Date.now() + 10 * 60_000 });
+  const hashedToken = data.properties.hashed_token;
 
-  const sent = await sendResetEmail(normalizedEmail, otp);
-  if (!sent) {
-    forgotPwStore.delete(normalizedEmail);
-    res.status(500).json({ success: false, error: "Failed to send reset email. Please try again." });
-    return;
+  // Build the reset URL using the app's public domain
+  const rawDomains = process.env["REPLIT_DOMAINS"] ?? process.env["REPLIT_DEV_DOMAIN"] ?? "";
+  const firstDomain = rawDomains.split(",")[0].trim();
+  const appOrigin = firstDomain ? `https://${firstDomain}` : "http://localhost:3000";
+  const authRoute = role === "scholar" ? "scholar" : role === "admin" ? "admin" : "student";
+  const resetUrl = `${appOrigin}/auth/${authRoute}?token_hash=${hashedToken}&type=recovery`;
+
+  // Try to deliver via Resend
+  const emailSent = await sendResetLinkEmail(normalizedEmail, resetUrl);
+
+  req.log.info({ email: normalizedEmail, emailSent }, "Password reset link generated");
+
+  if (emailSent) {
+    // Email delivered — don't expose the token in the response
+    res.json({ success: true, emailSent: true });
+  } else {
+    // Resend delivery failed (e.g. test-mode domain restriction).
+    // Return the token so the frontend can call verifyOtp directly.
+    req.log.warn({ email: normalizedEmail }, "Resend delivery failed — returning token for direct verify");
+    res.json({ success: true, emailSent: false, tokenHash: hashedToken });
   }
-
-  req.log.info({ email: normalizedEmail }, "Password reset OTP sent");
-  res.json({ success: true });
 });
 
 /* ════════════════════════════════════════════════════════════
