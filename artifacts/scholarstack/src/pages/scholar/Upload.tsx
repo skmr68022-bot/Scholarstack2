@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { examTags, universityTags, boardTags } from "../../data/constants";
 import { useApp } from "../../context/AppContext";
@@ -31,8 +31,6 @@ export default function Upload() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const thumbRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedThumb, setSelectedThumb] = useState<File | null>(null);
 
@@ -233,24 +231,36 @@ export default function Upload() {
         <p className="text-xs text-gray-400 font-semibold mb-3">Upload Files <span className="text-gray-600">(optional)</span></p>
         <div className="space-y-3">
           <div>
-            <input ref={fileRef} type="file" className="hidden"
+            <input
+              id="upload-file-input"
+              type="file"
               accept={type === "PDF" || type === "Bundle" ? "application/pdf,.pdf" : "video/*"}
-              onChange={e => setSelectedFile(e.target.files?.[0] ?? null)} />
-            <button onClick={() => fileRef.current?.click()}
-              className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2">
+              onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+            <label
+              htmlFor="upload-file-input"
+              className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer"
+            >
               <span>📎</span>
               {selectedFile ? selectedFile.name : `Choose ${type} file`}
-            </button>
+            </label>
           </div>
           <div>
-            <input ref={thumbRef} type="file" className="hidden"
+            <input
+              id="upload-thumb-input"
+              type="file"
               accept="image/*"
-              onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)} />
-            <button onClick={() => thumbRef.current?.click()}
-              className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2">
+              onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+            <label
+              htmlFor="upload-thumb-input"
+              className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer"
+            >
               <span>🖼</span>
               {selectedThumb ? selectedThumb.name : "Choose thumbnail image (optional)"}
-            </button>
+            </label>
           </div>
         </div>
       </section>

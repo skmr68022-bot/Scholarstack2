@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { examTags, universityTags, boardTags } from "../../data/constants";
 import { useApp } from "../../context/AppContext";
@@ -27,8 +27,6 @@ export default function VideoUpload() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  const videoRef = useRef<HTMLInputElement>(null);
-  const thumbRef = useRef<HTMLInputElement>(null);
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [selectedThumb, setSelectedThumb] = useState<File | null>(null);
 
@@ -215,12 +213,19 @@ export default function VideoUpload() {
 
         {/* Video file */}
         <div>
-          <input ref={videoRef} type="file" className="hidden" accept="video/*"
-            onChange={e => setSelectedVideo(e.target.files?.[0] ?? null)} />
-          <button onClick={() => videoRef.current?.click()}
-            className={`w-full py-5 rounded-xl border-2 border-dashed transition flex flex-col items-center justify-center gap-2 ${
+          <input
+            id="video-file-input"
+            type="file"
+            accept="video/*"
+            onChange={e => setSelectedVideo(e.target.files?.[0] ?? null)}
+            className="sr-only"
+          />
+          <label
+            htmlFor="video-file-input"
+            className={`w-full py-5 rounded-xl border-2 border-dashed transition flex flex-col items-center justify-center gap-2 cursor-pointer ${
               selectedVideo ? "border-purple-500/50 bg-purple-600/10" : "border-white/15 hover:border-purple-500/40 hover:bg-purple-600/5"
-            }`}>
+            }`}
+          >
             <span className="text-2xl">{selectedVideo ? "▶" : "+"}</span>
             <div className="text-center">
               {selectedVideo ? (
@@ -235,20 +240,27 @@ export default function VideoUpload() {
                 </>
               )}
             </div>
-          </button>
+          </label>
         </div>
 
         {/* Thumbnail */}
         <div>
-          <input ref={thumbRef} type="file" className="hidden" accept="image/*"
-            onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)} />
-          <button onClick={() => thumbRef.current?.click()}
-            className={`w-full py-3 rounded-xl border border-dashed transition flex items-center justify-center gap-2 text-xs ${
+          <input
+            id="video-thumb-input"
+            type="file"
+            accept="image/*"
+            onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
+            className="sr-only"
+          />
+          <label
+            htmlFor="video-thumb-input"
+            className={`w-full py-3 rounded-xl border border-dashed transition flex items-center justify-center gap-2 text-xs cursor-pointer ${
               selectedThumb ? "border-purple-500/40 text-purple-300" : "border-white/15 text-gray-400 hover:text-white hover:border-white/30"
-            }`}>
+            }`}
+          >
             <span>🖼</span>
             {selectedThumb ? selectedThumb.name : "Choose thumbnail image (optional)"}
-          </button>
+          </label>
         </div>
 
         <p className="text-[10px] text-gray-500">Video reels are free for students — great for building your audience and getting discovered.</p>
