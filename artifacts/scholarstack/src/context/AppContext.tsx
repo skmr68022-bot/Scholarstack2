@@ -9,6 +9,27 @@ import {
 import type { Note, Profile, ScholarApproval } from "../lib/database.types";
 import type { User } from "@supabase/supabase-js";
 
+/* ── Apply session: persist to localStorage AND update Supabase client state ── */
+async function applySession(session: {
+  access_token: string;
+  refresh_token: string;
+  expires_in?: number;
+  expires_at?: number;
+  token_type?: string;
+  user?: unknown;
+}) {
+  window.localStorage.setItem("ss_auth_v2", JSON.stringify(session));
+  try {
+    await supabase.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+  } catch {
+    // setSession failure is non-fatal — localStorage is already set and
+    // the auth listener will pick it up on next page load
+  }
+}
+
 /* ─── Types ───────────────────────────────────────────────── */
 
 export type Role = "student" | "scholar" | "admin" | null;
@@ -337,8 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           error: `This account is registered as a ${sessionRole}. Please go to the ${sessionRole} sign-in page, or create a new account here.`,
         };
       }
-      // Write session directly to Supabase localStorage (bypasses setSession's getUser network call)
-      window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
+      await applySession(json.session);
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Check your connection." };
@@ -414,7 +434,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         session?: { access_token: string; refresh_token: string; expires_in: number; expires_at: number; token_type: string; user: { id: string; email?: string } };
       };
       if (!json.success || !json.session) return { success: false, error: json.error ?? "Verification failed." };
-      window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
+      await applySession(json.session);
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Please check your connection." };
@@ -449,7 +469,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         session?: { access_token: string; refresh_token: string; expires_in: number; expires_at: number; token_type: string; user: { id: string; email?: string } };
       };
       if (!json.success || !json.session) return { success: false, error: json.error ?? "Verification failed." };
-      window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
+      await applySession(json.session);
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Please check your connection." };
@@ -498,34 +518,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ): Promise<{ success: boolean; error?: string }> => {
     if (!currentUser) return { success: false, error: "Not logged in." };
 
-    const { data, error } = await insertNote({
-      title: item.title,
-      description: item.description ?? null,
-      scholar_id: currentUser.id,
-      scholar_name: currentUser.name,
-      price: item.price,
-      original_price: item.original ?? null,
-      exam: item.exam ?? null,
-      category: (item.category as "competitive" | "university" | "board") ?? null,
-      board_type: item.boardType ?? null,
-      subject: item.subject ?? null,
-      pages: item.pages ?? 100,
-      color: item.color ?? "bg-violet-500",
-      tag: "New",
-      rating: 0,
-      reviews_count: 0,
-      sales_count: 0,
-      content_type: (item.type as "PDF" | "Video" | "Bundle") ?? "PDF",
-      status: "review",
-      file_url: item.fileUrl ?? null,
-      thumbnail_url: null,
-    });
-
-    if (error || !data) return { success: false, error: error ?? "Upload failed." };
-
-    const newItem = noteToUploadItem(data);
-    setUploads((prev) => [newItem, ...prev]);
-    return { success: true };
+    try {
+      const res = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: item.title,
+          description: item.description ?? null,
+          scholar_id: currentUser.id,
+          scholar_name: currentUser.name,
+          price: item.price,
+          original_price: item.original ?? null,
+          exam: item.exam ?? null,
+          category: item.category ?? null,
+          board_type: item.boardType ?? null,
+          subject: item.subject ?? null,
+          pages: item.pages ?? 100,
+          color: item.color ?? "bg-violet-500",
+          tag: "New",
+          rating: 0,
+          reviews_count: 0,
+          sales_count: 0,
+          content_type: item.type ?? "PDF",
+          status: "review",
+          file_url: item.fileUrl ?? null,
+          thumbnail_url: null,
+        }),
+      });
+      const json = await res.json() as { success: boolean; error?: string; note?: Note };
+      if (!json.success || !json.note) return { success: false, error: json.error ?? "Upload failed." };
+      const newItem = noteToUploadItem(json.note);
+      setUploads((prev) => [newItem, ...prev]);
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error. Please check your connection." };
+    }
   };
 
   const approveContent = async (id: number) => {

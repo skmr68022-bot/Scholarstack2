@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
 
 type AuthMode = "login" | "signup";
 type Tab      = "email" | "phone";
@@ -214,6 +215,7 @@ export default function Auth() {
       setLoading(false);
       if (json.success && json.session) {
         window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
+        await supabase.auth.setSession({ access_token: json.session.access_token as string, refresh_token: json.session.refresh_token as string }).catch(() => {});
         redirectAfterAuth();
       } else if (json.success) {
         setStep("form"); setMode("login");
