@@ -66,9 +66,6 @@ export default function RoleSelect() {
             </button>
           ))}
         </div>
-        <button onClick={() => choose("admin")} className="text-xs text-gray-500 hover:text-gray-300 transition underline">
-          Admin access →
-        </button>
       </div>
     </div>
   );
