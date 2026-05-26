@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "DoPHgnqXX1ZO7VvpAzjPf"
+uri = "file://scholarstack-source.tar.gz"
+type = "unspecified"
+title = "ScholarStack Source Code (120KB)"
