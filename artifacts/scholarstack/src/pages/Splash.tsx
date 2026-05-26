@@ -21,13 +21,7 @@ export default function Splash() {
         setResolved(true);
         setFading(true);
         setTimeout(() => {
-          if (currentUser) {
-            if (currentUser.role === "admin") setLocation("/admin");
-            else if (currentUser.role === "scholar") setLocation("/scholar");
-            else setLocation("/student");
-          } else {
-            setLocation("/role");
-          }
+          setLocation("/role");
         }, 400);
       }
       if (v >= 140) {

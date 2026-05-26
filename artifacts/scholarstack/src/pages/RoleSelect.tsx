@@ -4,11 +4,18 @@ import { useApp } from "../context/AppContext";
 
 export default function RoleSelect() {
   const [, setLocation] = useLocation();
-  const { setRole } = useApp();
+  const { setRole, currentUser } = useApp();
 
   const choose = (r: "student" | "scholar" | "admin") => {
     setRole(r);
     setLocation(`/auth/${r}`);
+  };
+
+  const continueAsCurrentUser = () => {
+    if (!currentUser) return;
+    if (currentUser.role === "admin") setLocation("/admin");
+    else if (currentUser.role === "scholar") setLocation("/scholar");
+    else setLocation("/student");
   };
 
   return (
@@ -23,6 +30,20 @@ export default function RoleSelect() {
         </div>
         <h2 className="text-3xl font-black text-white mb-2">Welcome! Who are you?</h2>
         <p className="text-gray-400 mb-8 text-sm">Select your role to get a personalized experience</p>
+
+        {currentUser && (
+          <button
+            onClick={continueAsCurrentUser}
+            className="w-full mb-6 flex items-center justify-between px-5 py-4 rounded-2xl bg-gradient-to-r from-violet-600/20 to-indigo-600/10 border border-violet-500/30 hover:border-violet-400/50 hover:bg-violet-600/25 transition-all group"
+          >
+            <div className="text-left">
+              <div className="text-xs text-violet-400 font-semibold mb-0.5">Already signed in</div>
+              <div className="text-sm font-bold text-white">Continue as {currentUser.name}</div>
+              <div className="text-xs text-gray-400 capitalize">{currentUser.role} account</div>
+            </div>
+            <span className="text-violet-400 text-lg group-hover:translate-x-1 transition-transform">→</span>
+          </button>
+        )}
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           {[
