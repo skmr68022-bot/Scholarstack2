@@ -14,15 +14,21 @@ function getAdminClient() {
 
 router.post("/auth/signup", async (req, res) => {
   const { name, email, password, role, expertise } = req.body as {
-    name: string;
-    email: string;
-    password: string;
-    role: "student" | "scholar";
+    name?: string;
+    email?: string;
+    password?: string;
+    role?: string;
     expertise?: string;
   };
 
   if (!name || !email || !password || !role) {
     res.status(400).json({ success: false, error: "Missing required fields." });
+    return;
+  }
+
+  // Security: whitelist role — never allow self-provisioning admin via signup
+  if (role !== "student" && role !== "scholar") {
+    res.status(400).json({ success: false, error: "Invalid role. Must be 'student' or 'scholar'." });
     return;
   }
 

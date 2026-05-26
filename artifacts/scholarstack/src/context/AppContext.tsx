@@ -402,10 +402,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           user: { id: string; email?: string };
         };
       };
-      if (loginJson.success && loginJson.session) {
-        window.localStorage.setItem("ss_auth_v2", JSON.stringify(loginJson.session));
+      if (!loginJson.success || !loginJson.session) {
+        return {
+          success: false,
+          error: "Account created — please switch to Sign In and log in.",
+        };
       }
-
+      window.localStorage.setItem("ss_auth_v2", JSON.stringify(loginJson.session));
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Please check your connection and try again." };
