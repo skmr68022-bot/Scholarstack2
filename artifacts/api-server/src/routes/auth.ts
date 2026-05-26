@@ -119,9 +119,12 @@ router.post("/auth/login", async (req, res) => {
   const data = await response.json() as {
     access_token?: string;
     refresh_token?: string;
+    expires_in?: number;
+    expires_at?: number;
+    token_type?: string;
     error?: string;
     error_description?: string;
-    user?: { id: string };
+    user?: { id: string; email?: string };
   };
 
   if (!response.ok || !data.access_token) {
@@ -132,10 +135,17 @@ router.post("/auth/login", async (req, res) => {
   }
 
   req.log.info({ userId: data.user?.id }, "Login successful");
+  // Return full session shape so client can write directly to Supabase localStorage
   res.json({
     success: true,
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
+    session: {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_in: data.expires_in,
+      expires_at: data.expires_at,
+      token_type: data.token_type ?? "bearer",
+      user: data.user,
+    },
   });
 });
 

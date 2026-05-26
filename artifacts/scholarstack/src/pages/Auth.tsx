@@ -43,9 +43,10 @@ export default function Auth() {
   const roleLabel = isAdmin ? "Admin" : isScholar ? "Scholar" : "Student";
 
   const redirectAfterAuth = () => {
-    if (isAdmin) setLocation("/admin");
-    else if (isScholar) setLocation("/scholar");
-    else setLocation("/student");
+    // Hard navigation so the Supabase client re-initializes and reads the new session from localStorage
+    const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+    const path = isAdmin ? "/admin" : isScholar ? "/scholar" : "/student";
+    window.location.href = `${base}${path}`;
   };
 
   const friendlyError = (msg: string): string => {

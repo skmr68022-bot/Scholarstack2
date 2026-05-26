@@ -284,7 +284,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ): Promise<{ success: boolean; error?: string }> => {
     setAuthLoading(true);
     try {
-      // Route through API server so it works even if browser can't reach Supabase directly
+      // Route through API server — bypasses any browser → Supabase connectivity issues
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -293,17 +293,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const json = (await res.json()) as {
         success: boolean;
         error?: string;
-        access_token?: string;
-        refresh_token?: string;
+        session?: {
+          access_token: string;
+          refresh_token: string;
+          expires_in: number;
+          expires_at: number;
+          token_type: string;
+          user: { id: string; email?: string };
+        };
       };
-      if (!json.success || !json.access_token || !json.refresh_token) {
+      if (!json.success || !json.session) {
         return { success: false, error: json.error ?? "Login failed." };
       }
-      // Inject the session so Supabase client is authenticated for subsequent calls
-      await supabase.auth.setSession({
-        access_token: json.access_token,
-        refresh_token: json.refresh_token,
-      });
+      // Write session directly to Supabase localStorage (bypasses setSession's getUser network call)
+      window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Check your connection." };
@@ -369,14 +372,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const loginJson = (await loginRes.json()) as {
         success: boolean;
         error?: string;
-        access_token?: string;
-        refresh_token?: string;
+        session?: {
+          access_token: string;
+          refresh_token: string;
+          expires_in: number;
+          expires_at: number;
+          token_type: string;
+          user: { id: string; email?: string };
+        };
       };
-      if (loginJson.success && loginJson.access_token && loginJson.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: loginJson.access_token,
-          refresh_token: loginJson.refresh_token,
-        });
+      if (loginJson.success && loginJson.session) {
+        window.localStorage.setItem("ss_auth_v2", JSON.stringify(loginJson.session));
       }
 
       return { success: true };
