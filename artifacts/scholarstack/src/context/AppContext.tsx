@@ -1,48 +1,23 @@
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "../lib/supabase";
+import {
+  getProfile, upsertProfile, updateProfile as dbUpdateProfile,
+  getPurchasedNoteIds, getBookmarkedNoteIds, addPurchase, toggleBookmarkDB,
+  getAllNotes, getAllProfiles, getPendingScholars, updateScholarApproval,
+  updateNoteStatus, insertNote, getNotes,
+} from "../lib/db";
+import type { Note, Profile, ScholarApproval } from "../lib/database.types";
+import type { User } from "@supabase/supabase-js";
 
-import { createContext, useContext, useState, useEffect } from "react";
+/* ─── Types ───────────────────────────────────────────────── */
 
-type Role = "student" | "scholar" | "admin" | null;
-
-export interface RegisteredUser {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-  role: "student" | "scholar";
-  expertise?: string;
-  createdAt: number;
-}
+export type Role = "student" | "scholar" | "admin" | null;
 
 export interface CurrentUser {
   id: string;
   name: string;
   email: string;
   role: "student" | "scholar" | "admin";
-}
-
-interface AppContextType {
-  role: Role;
-  setRole: (r: Role) => void;
-  currentUser: CurrentUser | null;
-  login: (email: string, password: string, role: "student" | "scholar" | "admin") => { success: boolean; error?: string };
-  signup: (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }) => { success: boolean; error?: string };
-  signupWithPhone: (data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }) => { success: boolean; error?: string };
-  loginWithPhone: (phone: string, role: "student" | "scholar") => { success: boolean; user?: RegisteredUser; error?: string };
-  completePhoneLogin: (phone: string, role: "student" | "scholar") => { success: boolean; error?: string };
-  logout: () => void;
-  purchased: Set<number>;
-  addPurchased: (id: number) => void;
-  bookmarked: Set<number>;
-  toggleBookmark: (id: number) => void;
-  uploads: UploadItem[];
-  addUpload: (item: UploadItem) => void;
-  approveContent: (id: number) => void;
-  rejectContent: (id: number) => void;
-  pendingScholars: PendingScholar[];
-  removeScholar: (id: number) => void;
-  users: AdminUser[];
-  banUser: (id: number) => void;
 }
 
 export interface UploadItem {
@@ -66,6 +41,7 @@ export interface UploadItem {
   tag?: string;
   subject?: string;
   boardType?: string;
+  fileUrl?: string;
   submittedAt?: number;
 }
 
@@ -79,6 +55,7 @@ export interface PendingScholar {
 
 export interface AdminUser {
   id: number;
+  profileId: string;
   name: string;
   email: string;
   role: string;
@@ -86,243 +63,464 @@ export interface AdminUser {
   status: string;
 }
 
-const ADMIN_EMAIL = "admin@scholarstack.in";
-const ADMIN_PASSWORD = "ScholarAdmin@2024";
-const USERS_KEY = "ss_registered_users";
-const SESSION_KEY = "ss_current_user";
+/* ─── Context interface ───────────────────────────────────── */
 
-function loadUsers(): RegisteredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-function saveUsers(users: RegisteredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-function loadSession(): CurrentUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-function saveSession(user: CurrentUser | null) {
-  if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  else localStorage.removeItem(SESSION_KEY);
+interface AppContextType {
+  role: Role;
+  setRole: (r: Role) => void;
+  currentUser: CurrentUser | null;
+  loading: boolean;
+  authLoading: boolean;
+  login: (email: string, password: string, loginRole: "student" | "scholar" | "admin") => Promise<{ success: boolean; error?: string }>;
+  signup: (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }) => Promise<{ success: boolean; error?: string }>;
+  signupWithPhone: (data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }) => Promise<{ success: boolean; error?: string }>;
+  loginWithPhone: (phone: string, role: "student" | "scholar") => Promise<{ success: boolean; error?: string }>;
+  completePhoneLogin: (phone: string, role: "student" | "scholar") => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  purchased: Set<number>;
+  addPurchased: (noteId: number, amount: string, method: string) => Promise<void>;
+  bookmarked: Set<number>;
+  toggleBookmark: (noteId: number) => Promise<void>;
+  uploads: UploadItem[];
+  addUpload: (item: UploadItem & { fileUrl?: string }) => Promise<{ success: boolean; error?: string }>;
+  approveContent: (id: number) => Promise<void>;
+  rejectContent: (id: number) => Promise<void>;
+  pendingScholars: PendingScholar[];
+  removeScholar: (id: number) => Promise<void>;
+  approveScholar: (id: number) => Promise<void>;
+  users: AdminUser[];
+  banUser: (id: number) => Promise<void>;
+  refreshUploads: () => Promise<void>;
+  updateUserProfile: (updates: { name?: string; expertise?: string; avatar_url?: string }) => Promise<{ success: boolean; error?: string }>;
 }
 
-const DEMO_UPLOADS: UploadItem[] = [
-  {
-    id: 101, title: "UPSC GS Paper 1 — Complete Strategy Notes", type: "PDF",
-    price: "₹299", original: "₹799", sales: 3240, earnings: "₹97,076",
-    rating: 4.9, reviews: 4820, status: "live", category: "competitive", exam: "UPSC",
-    scholar: "Dr. Rajiv Menon", scholarId: "scholar-demo-1", pages: 280,
-    color: "bg-orange-500", tag: "Bestseller",
-    description: "Complete GS Paper 1 strategy covering History, Geography, Indian Society, and Art & Culture. Includes PYQ analysis 2011–2024, high-value topic mapping, and 40+ mind maps.",
-    submittedAt: Date.now() - 864000000,
-  },
-  {
-    id: 102, title: "NEET Physics Crash Course Notes 2025", type: "PDF",
-    price: "₹229", original: "₹549", sales: 1890, earnings: "₹39,710",
-    rating: 4.8, reviews: 3100, status: "live", category: "competitive", exam: "NEET",
-    scholar: "Priya Sharma", scholarId: "scholar-demo-2", pages: 180,
-    color: "bg-pink-500", tag: "Top Rated",
-    description: "Compact but complete Physics notes for NEET. All chapters from Class 11 & 12 with 200+ important formulas and NCERT-based MCQs.",
-    submittedAt: Date.now() - 1728000000,
-  },
-  {
-    id: 103, title: "JEE Advanced Chemistry Solutions — 10 Years", type: "PDF",
-    price: "Free", original: "", sales: 22100, earnings: "₹0",
-    rating: 4.9, reviews: 8200, status: "live", category: "competitive", exam: "JEE",
-    scholar: "Karan Mehta", scholarId: "scholar-demo-3", pages: 220,
-    color: "bg-blue-500", tag: "Free",
-    description: "Detailed step-by-step solutions to all JEE Advanced Chemistry questions from 2014 to 2024. Covers Organic, Inorganic, and Physical Chemistry.",
-    submittedAt: Date.now() - 2592000000,
-  },
-  {
-    id: 104, title: "B.Tech Engineering Mathematics Notes (VTU Sem 3)", type: "PDF",
-    price: "₹149", original: "₹349", sales: 2810, earnings: "₹44,619",
-    rating: 4.7, reviews: 1940, status: "live", category: "university", exam: "VTU",
-    scholar: "Prof. Sanjay K", scholarId: "scholar-demo-4", pages: 160,
-    color: "bg-indigo-500", tag: "Trending",
-    description: "Full semester 3 Engineering Mathematics notes for VTU. Covers Fourier Series, Laplace Transforms, Vector Calculus, and Numerical Methods with solved examples.",
-    submittedAt: Date.now() - 3456000000,
-  },
-  {
-    id: 105, title: "Class 12 CBSE Physics — All Chapters Notes", type: "PDF",
-    price: "₹129", original: "₹299", sales: 5420, earnings: "₹70,018",
-    rating: 4.8, reviews: 6700, status: "live", category: "board", exam: "Class 12",
-    scholar: "Neha Jain", scholarId: "scholar-demo-5", pages: 190,
-    color: "bg-blue-600", tag: "Bestseller",
-    description: "All 15 chapters of CBSE Class 12 Physics with theory, important derivations, numericals, and board-exam tips. Based on latest 2024–25 syllabus.",
-    boardType: "CBSE", subject: "Physics", submittedAt: Date.now() - 4320000000,
-  },
-  /* ── Pending admin approval (content queue) ── */
-  {
-    id: 201, title: "CAT 2025 Verbal Ability Master Shortcuts", type: "PDF",
-    price: "₹349", original: "₹899", sales: 0, earnings: "₹0",
-    rating: 0, reviews: 0, status: "review", category: "competitive", exam: "CAT",
-    scholar: "MBA Guru", scholarId: "scholar-demo-6", pages: 160,
-    color: "bg-purple-500", tag: "New",
-    description: "All verbal ability tricks and shortcuts for CAT 2025. Covers Reading Comprehension, Para-Jumbles, and Verbal Logic.",
-    submittedAt: Date.now() - 3600000,
-  },
-  {
-    id: 202, title: "Maharashtra HSC Mathematics Solved Papers 2025", type: "PDF",
-    price: "₹149", original: "₹349", sales: 0, earnings: "₹0",
-    rating: 0, reviews: 0, status: "review", category: "board", exam: "Maharashtra Board",
-    scholar: "Pune Toppers", scholarId: "scholar-demo-7", pages: 190,
-    color: "bg-cyan-600", tag: "New",
-    description: "Complete solved mathematics papers for Maharashtra HSC board exams 2019–2024 with step-by-step solutions.",
-    boardType: "State Board", subject: "Mathematics", submittedAt: Date.now() - 7200000,
-  },
-  {
-    id: 203, title: "Data Structures & Algorithms — Mumbai University", type: "PDF",
-    price: "₹199", original: "₹499", sales: 0, earnings: "₹0",
-    rating: 0, reviews: 0, status: "review", category: "university", exam: "Mumbai University",
-    scholar: "Code with Ria", scholarId: "scholar-demo-8", pages: 240,
-    color: "bg-pink-500", tag: "New",
-    description: "Comprehensive DSA notes for Mumbai University exams. Covers Arrays, Linked Lists, Trees, Graphs, Sorting, and Searching with Java/C++ code.",
-    subject: "Computer Science", submittedAt: Date.now() - 10800000,
-  },
-  /* ── Scholar's own content page items (pre-existing) ── */
-  {
-    id: 301, title: "UPSC Polity Complete Notes 2025", type: "PDF",
-    price: "₹299", original: "₹799", sales: 1240, earnings: "₹37,076",
-    rating: 4.9, reviews: 12400, status: "live",
-    scholar: "Dr. Rajiv Menon", scholarId: "scholar-demo-1",
-  },
-  {
-    id: 302, title: "Modern History Short Notes", type: "PDF",
-    price: "₹149", original: "₹399", sales: 890, earnings: "₹13,261",
-    rating: 4.8, reviews: 5600, status: "live",
-    scholar: "Dr. Rajiv Menon", scholarId: "scholar-demo-1",
-  },
-  {
-    id: 303, title: "Polity Shorts Series", type: "Video",
-    price: "Free", original: "", sales: 14200, earnings: "₹0",
-    rating: 4.7, reviews: 22000, status: "live",
-    scholar: "Dr. Rajiv Menon", scholarId: "scholar-demo-1",
-  },
-];
+/* ─── Helpers ─────────────────────────────────────────────── */
+
+function computeEarnings(price: string, sales: number): string {
+  if (price === "Free" || !price) return "₹0";
+  const amount = parseInt(price.replace(/[^0-9]/g, "")) || 0;
+  const total = Math.round(amount * sales * 0.7);
+  if (total >= 100000) return `₹${(total / 100000).toFixed(1)}L`;
+  if (total >= 1000) return `₹${Math.round(total / 1000)}K`;
+  return `₹${total}`;
+}
+
+function noteToUploadItem(note: Note): UploadItem {
+  return {
+    id: note.id,
+    title: note.title,
+    type: note.content_type,
+    price: note.price,
+    original: note.original_price ?? undefined,
+    sales: note.sales_count,
+    earnings: computeEarnings(note.price, note.sales_count),
+    rating: Number(note.rating),
+    reviews: note.reviews_count,
+    status: note.status,
+    category: note.category ?? undefined,
+    exam: note.exam ?? undefined,
+    scholar: note.scholar_name,
+    scholarId: note.scholar_id ?? undefined,
+    description: note.description ?? undefined,
+    pages: note.pages,
+    color: note.color,
+    tag: note.tag,
+    subject: note.subject ?? undefined,
+    boardType: note.board_type ?? undefined,
+    fileUrl: note.file_url ?? undefined,
+    submittedAt: new Date(note.created_at).getTime(),
+  };
+}
+
+function profileToAdminUser(profile: Profile, idx: number): AdminUser {
+  return {
+    id: idx + 1,
+    profileId: profile.id,
+    name: profile.name,
+    email: profile.email ?? "",
+    role: profile.role.charAt(0).toUpperCase() + profile.role.slice(1),
+    plan: profile.role === "scholar" ? (profile.is_verified ? "Verified" : "Pending") : "Free",
+    status: "active",
+  };
+}
+
+function approvalToPendingScholar(a: ScholarApproval, idx: number): PendingScholar {
+  const initials = (a.scholar_name ?? "S")
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  const bgs = [
+    "from-pink-400 to-rose-400",
+    "from-orange-400 to-red-400",
+    "from-blue-400 to-indigo-400",
+    "from-green-400 to-teal-400",
+    "from-purple-400 to-violet-400",
+  ];
+  return {
+    id: a.id,
+    name: a.scholar_name ?? "Scholar",
+    tag: a.expertise ?? "Education",
+    avatar: initials,
+    bg: bgs[idx % bgs.length],
+  };
+}
+
+/* ─── Context ─────────────────────────────────────────────── */
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>(null);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => loadSession());
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [purchased, setPurchased] = useState<Set<number>>(new Set());
   const [bookmarked, setBookmarked] = useState<Set<number>>(new Set());
-  const [uploads, setUploads] = useState<UploadItem[]>(DEMO_UPLOADS);
-  const [pendingScholars, setPendingScholars] = useState<PendingScholar[]>([
-    { id: 1, name: "Neha Gupta", tag: "NEET Expert", avatar: "NG", bg: "from-pink-400 to-rose-400" },
-    { id: 2, name: "Vikram Rao", tag: "UPSC Notes", avatar: "VR", bg: "from-orange-400 to-red-400" },
-    { id: 3, name: "Sonia K.", tag: "CAT Mentor", avatar: "SK", bg: "from-blue-400 to-indigo-400" },
-  ]);
-  const [users, setUsers] = useState<AdminUser[]>([
-    { id: 1, name: "Priya Sharma", email: "priya@email.com", role: "Student", plan: "Pro", status: "active" },
-    { id: 2, name: "Dr. Rajiv M.", email: "rajiv@email.com", role: "Scholar", plan: "Verified", status: "active" },
-    { id: 3, name: "Rahul Verma", email: "rahul@email.com", role: "Student", plan: "Free", status: "active" },
-    { id: 4, name: "Spam User", email: "spam@test.com", role: "Student", plan: "Free", status: "flagged" },
-  ]);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [pendingScholars, setPendingScholars] = useState<PendingScholar[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
 
-  useEffect(() => {
-    if (currentUser) setRole(currentUser.role);
+  /* ── load role-specific data after auth ── */
+  const loadRoleData = useCallback(async (profile: Profile) => {
+    if (profile.role === "student") {
+      const [pIds, bIds] = await Promise.all([
+        getPurchasedNoteIds(profile.id),
+        getBookmarkedNoteIds(profile.id),
+      ]);
+      setPurchased(new Set(pIds));
+      setBookmarked(new Set(bIds));
+    }
+    if (profile.role === "scholar") {
+      const notes = await getNotes({ scholarId: profile.id });
+      setUploads(notes.map(noteToUploadItem));
+    }
+    if (profile.role === "admin") {
+      const [allNotes, allProfiles, approvals] = await Promise.all([
+        getAllNotes(),
+        getAllProfiles(),
+        getPendingScholars(),
+      ]);
+      setUploads(allNotes.map(noteToUploadItem));
+      setUsers(allProfiles.map(profileToAdminUser));
+      setPendingScholars(
+        (approvals as ScholarApproval[]).map(approvalToPendingScholar),
+      );
+    }
   }, []);
 
-  const login = (email: string, password: string, loginRole: "student" | "scholar" | "admin"): { success: boolean; error?: string } => {
-    const trimEmail = email.trim().toLowerCase();
-    const trimPw = password.trim();
-    if (!trimEmail || !trimPw) return { success: false, error: "Please fill in all fields." };
-    if (loginRole === "admin") {
-      if (trimEmail === ADMIN_EMAIL.toLowerCase() && trimPw === ADMIN_PASSWORD) {
-        const user: CurrentUser = { id: "admin-1", name: "Admin", email: ADMIN_EMAIL, role: "admin" };
-        setCurrentUser(user); saveSession(user); setRole("admin");
-        return { success: true };
+  const applyProfile = useCallback(
+    async (profile: Profile) => {
+      setCurrentUser({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email ?? "",
+        role: profile.role,
+      });
+      setRole(profile.role);
+      await loadRoleData(profile);
+    },
+    [loadRoleData],
+  );
+
+  const loadUser = useCallback(
+    async (user: User) => {
+      let profile = await getProfile(user.id);
+      if (!profile) {
+        profile = await upsertProfile({
+          id: user.id,
+          name:
+            (user.user_metadata?.name as string | undefined) ??
+            user.email?.split("@")[0] ??
+            "User",
+          email: user.email ?? null,
+          role:
+            (user.user_metadata?.role as "student" | "scholar") ?? "student",
+          expertise:
+            (user.user_metadata?.expertise as string | undefined) ?? null,
+        });
       }
-      return { success: false, error: "Invalid admin credentials." };
+      if (profile) await applyProfile(profile);
+    },
+    [applyProfile],
+  );
+
+  /* ── Auth listener ── */
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await loadUser(session.user);
+      }
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        await loadUser(session.user);
+      } else {
+        setCurrentUser(null);
+        setRole(null);
+        setPurchased(new Set());
+        setBookmarked(new Set());
+        setUploads([]);
+        setPendingScholars([]);
+        setUsers([]);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadUser]);
+
+  /* ── Auth functions ── */
+
+  const login = async (
+    email: string,
+    password: string,
+    loginRole: "student" | "scholar" | "admin",
+  ): Promise<{ success: boolean; error?: string }> => {
+    setAuthLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+      });
+      if (error) return { success: false, error: error.message };
+
+      if (data.user) {
+        const profile = await getProfile(data.user.id);
+        if (profile && loginRole !== "admin" && profile.role !== loginRole) {
+          await supabase.auth.signOut();
+          return {
+            success: false,
+            error: `This account is registered as a ${profile.role}, not ${loginRole}.`,
+          };
+        }
+      }
+      return { success: true };
+    } finally {
+      setAuthLoading(false);
     }
-    const registeredUsers = loadUsers();
-    const found = registeredUsers.find(u => u.email.toLowerCase() === trimEmail && u.password === trimPw && u.role === loginRole);
-    if (!found) {
-      const emailExists = registeredUsers.find(u => u.email.toLowerCase() === trimEmail);
-      if (emailExists) return { success: false, error: "Incorrect password." };
-      return { success: false, error: "No account found with this email. Please sign up." };
+  };
+
+  const signup = async (data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    role: "student" | "scholar";
+    expertise?: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    setAuthLoading(true);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: data.email.trim().toLowerCase(),
+        password: data.password.trim(),
+        options: {
+          data: {
+            name: data.name.trim(),
+            role: data.role,
+            expertise: data.expertise ?? null,
+          },
+        },
+      });
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } finally {
+      setAuthLoading(false);
     }
-    const user: CurrentUser = { id: found.id, name: found.name, email: found.email, role: found.role };
-    setCurrentUser(user); saveSession(user); setRole(found.role);
+  };
+
+  const signupWithPhone = async (_data: {
+    name: string;
+    phone: string;
+    role: "student" | "scholar";
+    expertise?: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    return {
+      success: false,
+      error: "Phone authentication requires SMS provider setup. Please use email signup.",
+    };
+  };
+
+  const loginWithPhone = async (
+    _phone: string,
+    _loginRole: "student" | "scholar",
+  ): Promise<{ success: boolean; error?: string }> => {
+    return {
+      success: false,
+      error: "Phone authentication requires SMS provider setup. Please use email login.",
+    };
+  };
+
+  const completePhoneLogin = async (
+    _phone: string,
+    _loginRole: "student" | "scholar",
+  ): Promise<{ success: boolean; error?: string }> => {
+    return { success: false, error: "Phone authentication not configured." };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  /* ── Purchases ── */
+
+  const addPurchased = async (noteId: number, amount: string, method: string) => {
+    if (!currentUser) return;
+    setPurchased((prev) => new Set([...prev, noteId]));
+    await addPurchase(currentUser.id, noteId, amount, method);
+  };
+
+  /* ── Bookmarks ── */
+
+  const toggleBookmark = async (noteId: number) => {
+    if (!currentUser) return;
+    const wasBookmarked = bookmarked.has(noteId);
+    setBookmarked((prev) => {
+      const ns = new Set(prev);
+      wasBookmarked ? ns.delete(noteId) : ns.add(noteId);
+      return ns;
+    });
+    await toggleBookmarkDB(currentUser.id, noteId);
+  };
+
+  /* ── Uploads ── */
+
+  const addUpload = async (
+    item: UploadItem & { fileUrl?: string },
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) return { success: false, error: "Not logged in." };
+
+    const { data, error } = await insertNote({
+      title: item.title,
+      description: item.description ?? null,
+      scholar_id: currentUser.id,
+      scholar_name: currentUser.name,
+      price: item.price,
+      original_price: item.original ?? null,
+      exam: item.exam ?? null,
+      category: (item.category as "competitive" | "university" | "board") ?? null,
+      board_type: item.boardType ?? null,
+      subject: item.subject ?? null,
+      pages: item.pages ?? 100,
+      color: item.color ?? "bg-violet-500",
+      tag: "New",
+      rating: 0,
+      reviews_count: 0,
+      sales_count: 0,
+      content_type: (item.type as "PDF" | "Video" | "Bundle") ?? "PDF",
+      status: "review",
+      file_url: item.fileUrl ?? null,
+      thumbnail_url: null,
+    });
+
+    if (error || !data) return { success: false, error: error ?? "Upload failed." };
+
+    const newItem = noteToUploadItem(data);
+    setUploads((prev) => [newItem, ...prev]);
     return { success: true };
   };
 
-  const signup = (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }): { success: boolean; error?: string } => {
-    const trimEmail = data.email.trim().toLowerCase();
-    const trimName = data.name.trim();
-    const trimPw = data.password.trim();
-    if (!trimName || !trimEmail || !trimPw) return { success: false, error: "Please fill in all required fields." };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimEmail)) return { success: false, error: "Please enter a valid email address." };
-    if (trimPw.length < 8) return { success: false, error: "Password must be at least 8 characters." };
-    const registeredUsers = loadUsers();
-    if (registeredUsers.find(u => u.email.toLowerCase() === trimEmail)) return { success: false, error: "An account with this email already exists. Please sign in." };
-    const newUser: RegisteredUser = { id: `user-${Date.now()}`, name: trimName, email: trimEmail, password: trimPw, phone: data.phone, role: data.role, expertise: data.expertise, createdAt: Date.now() };
-    saveUsers([...registeredUsers, newUser]);
-    const user: CurrentUser = { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role };
-    setCurrentUser(user); saveSession(user); setRole(newUser.role);
-    return { success: true };
+  const approveContent = async (id: number) => {
+    await updateNoteStatus(id, "live");
+    setUploads((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, status: "live" as const } : u)),
+    );
   };
 
-  const loginWithPhone = (phone: string, loginRole: "student" | "scholar"): { success: boolean; user?: RegisteredUser; error?: string } => {
-    const trimPhone = phone.trim().replace(/\s/g, "");
-    if (trimPhone.length !== 10 || !/^\d{10}$/.test(trimPhone)) return { success: false, error: "Please enter a valid 10-digit mobile number." };
-    const registeredUsers = loadUsers();
-    const found = registeredUsers.find(u => u.phone === trimPhone && u.role === loginRole);
-    if (!found) return { success: false, error: "No account found with this number. Please sign up first." };
-    return { success: true, user: found };
+  const rejectContent = async (id: number) => {
+    await updateNoteStatus(id, "rejected");
+    setUploads((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, status: "rejected" as const } : u)),
+    );
   };
 
-  const completePhoneLogin = (phone: string, loginRole: "student" | "scholar"): { success: boolean; error?: string } => {
-    const registeredUsers = loadUsers();
-    const found = registeredUsers.find(u => u.phone === phone && u.role === loginRole);
-    if (!found) return { success: false, error: "Account not found." };
-    const user: CurrentUser = { id: found.id, name: found.name, email: found.phone!, role: found.role };
-    setCurrentUser(user); saveSession(user); setRole(found.role);
-    return { success: true };
+  const refreshUploads = async () => {
+    if (!currentUser) return;
+    if (role === "admin") {
+      const allNotes = await getAllNotes();
+      setUploads(allNotes.map(noteToUploadItem));
+    } else if (role === "scholar") {
+      const notes = await getNotes({ scholarId: currentUser.id });
+      setUploads(notes.map(noteToUploadItem));
+    }
   };
 
-  const signupWithPhone = (data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }): { success: boolean; error?: string } => {
-    const trimPhone = data.phone.trim().replace(/\s/g, "");
-    const trimName = data.name.trim();
-    if (!trimName) return { success: false, error: "Please enter your full name." };
-    if (!/^\d{10}$/.test(trimPhone)) return { success: false, error: "Please enter a valid 10-digit mobile number." };
-    const registeredUsers = loadUsers();
-    if (registeredUsers.find(u => u.phone === trimPhone && u.role === data.role)) return { success: false, error: "An account with this number already exists. Please sign in." };
-    const newUser: RegisteredUser = { id: `user-${Date.now()}`, name: trimName, email: `phone_${trimPhone}@scholarstack.local`, password: "", phone: trimPhone, role: data.role, expertise: data.expertise, createdAt: Date.now() };
-    saveUsers([...registeredUsers, newUser]);
-    const user: CurrentUser = { id: newUser.id, name: newUser.name, email: newUser.phone!, role: newUser.role };
-    setCurrentUser(user); saveSession(user); setRole(newUser.role);
-    return { success: true };
+  /* ── Scholars ── */
+
+  const removeScholar = async (id: number) => {
+    await updateScholarApproval(id, "rejected");
+    setPendingScholars((prev) => prev.filter((s) => s.id !== id));
   };
 
-  const logout = () => { setCurrentUser(null); setRole(null); saveSession(null); };
+  const approveScholar = async (id: number) => {
+    await updateScholarApproval(id, "approved");
+    setPendingScholars((prev) => prev.filter((s) => s.id !== id));
+  };
 
-  const addPurchased = (id: number) => setPurchased(prev => new Set([...prev, id]));
-  const toggleBookmark = (id: number) => setBookmarked(prev => {
-    const ns = new Set(prev);
-    ns.has(id) ? ns.delete(id) : ns.add(id);
-    return ns;
-  });
-  const addUpload = (item: UploadItem) => setUploads(prev => [...prev, item]);
-  const approveContent = (id: number) => setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "live" } : u));
-  const rejectContent = (id: number) => setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "rejected" } : u));
-  const removeScholar = (id: number) => setPendingScholars(prev => prev.filter(s => s.id !== id));
-  const banUser = (id: number) => setUsers(prev => prev.map(u => u.id === id ? { ...u, status: "banned" } : u));
+  /* ── Users ── */
+
+  const banUser = async (id: number) => {
+    const user = users.find((u) => u.id === id);
+    if (user) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, status: "banned" } : u)),
+      );
+    }
+  };
+
+  /* ── Profile update ── */
+
+  const updateUserProfile = async (updates: {
+    name?: string;
+    expertise?: string;
+    avatar_url?: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser) return { success: false, error: "Not logged in." };
+    const result = await dbUpdateProfile(currentUser.id, updates);
+    if (result.success && updates.name) {
+      setCurrentUser((prev) =>
+        prev ? { ...prev, name: updates.name! } : prev,
+      );
+    }
+    return result;
+  };
 
   return (
-    <AppContext.Provider value={{
-      role, setRole, currentUser, login, signup, signupWithPhone, loginWithPhone, completePhoneLogin, logout,
-      purchased, addPurchased, bookmarked, toggleBookmark,
-      uploads, addUpload, approveContent, rejectContent,
-      pendingScholars, removeScholar, users, banUser,
-    }}>
+    <AppContext.Provider
+      value={{
+        role,
+        setRole,
+        currentUser,
+        loading,
+        authLoading,
+        login,
+        signup,
+        signupWithPhone,
+        loginWithPhone,
+        completePhoneLogin,
+        logout,
+        purchased,
+        addPurchased,
+        bookmarked,
+        toggleBookmark,
+        uploads,
+        addUpload,
+        approveContent,
+        rejectContent,
+        pendingScholars,
+        removeScholar,
+        approveScholar,
+        users,
+        banUser,
+        refreshUploads,
+        updateUserProfile,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );

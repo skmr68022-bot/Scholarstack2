@@ -1,71 +1,84 @@
 
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { notes } from "../../data/constants";
 import { useApp } from "../../context/AppContext";
+import { getPurchases } from "../../lib/db";
+
+interface OrderWithNote {
+  id: number;
+  note_id: number;
+  amount: string;
+  payment_method: string;
+  created_at: string;
+  notes: {
+    id: number;
+    title: string;
+    scholar_name: string;
+    color: string;
+    pages: number;
+  } | null;
+}
 
 export default function Orders() {
   const [, setLocation] = useLocation();
-  const { purchased } = useApp();
-  const myOrders = notes.filter(n => purchased.has(n.id));
+  const { currentUser } = useApp();
+  const [orders, setOrders] = useState<OrderWithNote[]>([]);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    if (!currentUser) { setFetching(false); return; }
+    setFetching(true);
+    getPurchases(currentUser.id)
+      .then(data => { setOrders(data as OrderWithNote[]); setFetching(false); })
+      .catch(() => setFetching(false));
+  }, [currentUser]);
 
   return (
     <div className="p-6">
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => setLocation("/student")} className="text-gray-400 hover:text-white transition text-xs">← Home</button>
-        <h1 className="font-black text-xl text-white flex-1">My Orders</h1>
-        <span className="text-xs text-gray-400">{myOrders.length} orders</span>
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => setLocation("/student")} className="text-gray-400 hover:text-white text-xs">← Home</button>
+        <h1 className="font-black text-xl text-white">Purchase History</h1>
       </div>
 
-      {myOrders.length === 0 ? (
-        <div className="text-center py-24">
-          <div className="text-7xl mb-5">🛒</div>
-          <div className="font-bold text-xl text-white mb-2">No orders yet</div>
-          <div className="text-gray-400 text-sm mb-8">Your purchase history will appear here</div>
-          <button onClick={() => setLocation("/student/notes")} className="px-6 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-sm font-bold text-white hover:opacity-90 transition">
-            Browse Notes →
+      {fetching ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-7 h-7 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="text-center py-20">
+          <p className="text-4xl mb-3">🛒</p>
+          <p className="font-semibold text-white mb-1">No orders yet</p>
+          <p className="text-xs text-gray-400 mb-6">Purchase notes to see them here.</p>
+          <button onClick={() => setLocation("/student/notes")}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold">
+            Browse Notes
           </button>
         </div>
       ) : (
         <div className="space-y-3">
-          {myOrders.map((n, i) => (
-            <div key={n.id} className="bg-[#13131a] border border-white/10 rounded-2xl p-4 flex items-center gap-4 hover:border-white/20 transition">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 relative overflow-hidden`}>
-                <div className={`absolute inset-0 ${n.color} opacity-50`} />
-                <span className="relative">📄</span>
+          {orders.map((order, i) => (
+            <div key={order.id} className="bg-[#13131a] border border-white/8 rounded-2xl p-4 flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl ${order.notes?.color ?? "bg-violet-500"} flex items-center justify-center shrink-0 text-white font-black text-sm`}>
+                {i + 1}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm text-white truncate">{n.title}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{n.scholar} · {n.exam}</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">Order #{String(1000 + i).padStart(6, "0")} · {n.pages} pages</div>
+                <p className="font-semibold text-sm text-white truncate">{order.notes?.title ?? "Unknown Note"}</p>
+                <p className="text-xs text-gray-400">{order.notes?.scholar_name ?? ""} · {order.notes?.pages ?? "—"} pages</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  {" · "}{order.payment_method.toUpperCase()}
+                </p>
               </div>
               <div className="text-right shrink-0">
-                <div className="font-black text-sm text-green-400">{n.price === "Free" ? "Free" : n.price}</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">Purchased</div>
+                <p className="font-black text-violet-400">{order.amount}</p>
+                <span className="text-[9px] text-green-400 font-semibold bg-green-400/10 px-2 py-0.5 rounded-full">Paid</span>
               </div>
-              <div className="flex gap-2">
-                <button className="px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-xs font-bold text-white hover:opacity-90 transition">
-                  📥 Download
-                </button>
-                <button onClick={() => setLocation(`/student/notes/${n.id}`)} className="px-3 py-2 rounded-lg bg-white/5 text-xs font-semibold text-gray-300 hover:bg-white/10 transition border border-white/10">
-                  View
-                </button>
-              </div>
+              <button onClick={() => setLocation(`/student/notes/${order.note_id}`)}
+                className="shrink-0 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-gray-300 hover:text-white hover:bg-white/10 transition">
+                Open
+              </button>
             </div>
           ))}
-
-          <div className="mt-4 bg-[#13131a] border border-white/10 rounded-2xl p-5">
-            <div className="font-bold text-sm text-white mb-3">Order Summary</div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">Total spent</span>
-              <span className="font-black text-white">
-                ₹{myOrders.filter(n => n.price !== "Free").reduce((s, n) => s + parseInt(n.price.replace("₹", "")), 0)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-gray-400">Free items</span>
-              <span className="font-bold text-green-400">{myOrders.filter(n => n.price === "Free").length}</span>
-            </div>
-          </div>
         </div>
       )}
     </div>

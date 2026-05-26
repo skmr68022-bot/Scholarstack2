@@ -1,10 +1,10 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { notes, examTags } from "../../data/constants";
+import { examTags } from "../../data/constants";
 import { useApp } from "../../context/AppContext";
-import type { Note } from "../../data/constants";
-import type { UploadItem } from "../../context/AppContext";
+import { getNotes } from "../../lib/db";
+import type { Note } from "../../lib/database.types";
 
 interface NoteCard {
   id: number; title: string; scholar: string; price: string; original: string;
@@ -12,29 +12,36 @@ interface NoteCard {
 }
 
 function toCard(n: Note): NoteCard {
-  return { id: n.id, title: n.title, scholar: n.scholar, price: n.price, original: n.original, rating: n.rating, reviews: n.reviews, tag: n.tag, exam: n.exam, pages: n.pages, color: n.color };
-}
-function uploadToCard(u: UploadItem): NoteCard {
-  return { id: u.id, title: u.title, scholar: u.scholar || "Scholar", price: u.price, original: u.original || "", rating: u.rating, reviews: u.reviews, tag: u.tag || "New", exam: u.exam || "", pages: u.pages || 100, color: u.color || "bg-violet-500" };
+  return {
+    id: n.id, title: n.title, scholar: n.scholar_name, price: n.price,
+    original: n.original_price ?? "", rating: Number(n.rating), reviews: n.reviews_count,
+    tag: n.tag, exam: n.exam ?? "", pages: n.pages, color: n.color,
+  };
 }
 
 export default function Notes() {
   const [, setLocation] = useLocation();
-  const { uploads, purchased } = useApp();
+  const { purchased } = useApp();
+  const [notes, setNotes] = useState<NoteCard[]>([]);
+  const [fetching, setFetching] = useState(true);
   const [search, setSearch] = useState("");
   const [activeExam, setActiveExam] = useState("All");
   const [activeFilter, setActiveFilter] = useState("All");
 
-  const liveUploads = uploads
-    .filter(u => u.status === "live" && u.category === "competitive")
-    .map(uploadToCard);
-  const competitiveNotes = notes.filter(n => n.category === "competitive").map(toCard);
-  const all = [...competitiveNotes, ...liveUploads];
+  useEffect(() => {
+    setFetching(true);
+    getNotes({ category: "competitive", status: "live" })
+      .then(data => { setNotes(data.map(toCard)); setFetching(false); })
+      .catch(() => setFetching(false));
+  }, []);
 
-  const filtered = all.filter(n =>
+  const filtered = notes.filter(n =>
     (activeExam === "All" || n.exam === activeExam) &&
     (search === "" || n.title.toLowerCase().includes(search.toLowerCase()) || n.scholar.toLowerCase().includes(search.toLowerCase())) &&
-    (activeFilter === "All" || (activeFilter === "Free" && n.price === "Free") || (activeFilter === "Bestseller" && n.tag === "Bestseller") || (activeFilter === "Top Rated" && n.rating >= 4.8))
+    (activeFilter === "All" ||
+     (activeFilter === "Free" && n.price === "Free") ||
+     (activeFilter === "Bestseller" && n.tag === "Bestseller") ||
+     (activeFilter === "Top Rated" && n.rating >= 4.8))
   );
 
   return (
@@ -58,61 +65,63 @@ export default function Notes() {
         ))}
       </div>
 
-      <div className="flex gap-2 mb-5 items-center">
+      <div className="flex gap-2 mb-6">
         {["All", "Free", "Bestseller", "Top Rated"].map(f => (
           <button key={f} onClick={() => setActiveFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs transition border ${activeFilter === f ? "bg-white/10 text-white border-white/20" : "border-white/10 text-gray-400 hover:border-white/20 hover:text-white"}`}>
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition border ${activeFilter === f ? "bg-violet-600/30 text-violet-300 border-violet-500/40" : "border-white/8 text-gray-500 hover:text-gray-300"}`}>
             {f}
           </button>
         ))}
-        <span className="ml-auto text-xs text-gray-500">{filtered.length} results</span>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {filtered.map(n => {
-          const owned = purchased.has(n.id) || n.price === "Free";
-          return (
-            <div key={n.id} onClick={() => setLocation(`/student/notes/${n.id}`)}
-              className="bg-[#13131a] border border-white/10 rounded-2xl overflow-hidden cursor-pointer hover:border-violet-500/30 transition hover:scale-[1.01] group">
-              <div className="h-28 flex items-center justify-center relative overflow-hidden">
-                <div className={`absolute inset-0 ${n.color} opacity-40`} />
-                <span className="relative text-4xl">📄</span>
-                <div className="absolute top-2 left-2 text-[10px] font-bold bg-white/15 text-white px-2 py-1 rounded-full backdrop-blur">{n.tag}</div>
-                <div className="absolute top-2 right-2 text-[10px] font-bold bg-black/30 text-white px-2 py-1 rounded-full">{n.exam}</div>
-                {owned && <div className="absolute bottom-2 right-2 text-[10px] font-bold bg-green-500/80 text-white px-2 py-0.5 rounded-full">Owned</div>}
-              </div>
-              <div className="p-4">
-                <div className="font-semibold text-sm text-white leading-tight mb-1">{n.title}</div>
-                <div className="text-xs text-gray-400 mb-2">{n.scholar}</div>
-                <div className="flex items-center gap-1 text-xs text-yellow-400 mb-3">
-                  ⭐ {n.rating} <span className="text-gray-500">({(n.reviews / 1000).toFixed(1)}K)</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-black text-sm ${n.price === "Free" ? "text-green-400" : "text-violet-400"}`}>{n.price}</span>
-                    {n.original && <span className="text-xs text-gray-500 line-through">{n.original}</span>}
-                  </div>
-                  <button className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold opacity-0 group-hover:opacity-100 transition">
-                    View →
-                  </button>
-                </div>
-                <div className="text-[10px] text-gray-500 mt-1">{n.pages} pages</div>
-              </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div className="col-span-3 text-center py-16 text-gray-400">
-            <div className="text-5xl mb-3">📭</div>
-            <div className="font-semibold text-white">No notes found</div>
-            <div className="text-sm mt-1">Try a different exam or search term</div>
-            <button onClick={() => { setSearch(""); setActiveExam("All"); setActiveFilter("All"); }}
-              className="mt-4 px-4 py-2 rounded-xl bg-violet-600/20 text-violet-400 text-xs font-semibold border border-violet-500/20 hover:bg-violet-600/30 transition">
-              Clear filters
-            </button>
+      {fetching ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-400">Loading notes…</p>
           </div>
-        )}
-      </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-500">
+          <p className="text-4xl mb-3">📚</p>
+          <p className="font-semibold">No notes found</p>
+          <p className="text-xs mt-1">Try a different filter or search</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {filtered.map(n => {
+            const isPurchased = purchased.has(n.id);
+            return (
+              <button key={n.id} onClick={() => setLocation(`/student/notes/${n.id}`)}
+                className="bg-[#13131a] border border-white/8 rounded-2xl overflow-hidden hover:border-violet-500/30 hover:scale-[1.02] transition-all duration-200 text-left group">
+                <div className={`h-28 ${n.color} relative flex items-end p-3`}>
+                  <div className="absolute inset-0 bg-black/20" />
+                  <div className="relative z-10">
+                    {isPurchased && (
+                      <span className="inline-block bg-green-500/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full mb-1">Purchased</span>
+                    )}
+                    <span className="inline-block bg-black/40 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{n.tag}</span>
+                  </div>
+                </div>
+                <div className="p-3">
+                  <p className="font-bold text-xs text-white line-clamp-2 mb-1 leading-snug">{n.title}</p>
+                  <p className="text-[10px] text-gray-400 mb-2">{n.scholar}</p>
+                  <div className="flex items-center gap-1 mb-2">
+                    <span className="text-yellow-400 text-[10px]">★</span>
+                    <span className="text-[10px] text-gray-300">{n.rating.toFixed(1)}</span>
+                    <span className="text-[10px] text-gray-500">({(n.reviews / 1000).toFixed(1)}K)</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black text-violet-400">{n.price}</span>
+                    {n.original && <span className="text-[10px] text-gray-500 line-through">{n.original}</span>}
+                  </div>
+                  <p className="text-[9px] text-gray-500 mt-1">{n.pages} pages</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
