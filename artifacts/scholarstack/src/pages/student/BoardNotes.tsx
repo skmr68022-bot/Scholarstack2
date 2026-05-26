@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { boardTags } from "../../data/constants";
 import { useApp } from "../../context/AppContext";
@@ -33,12 +33,19 @@ export default function BoardNotes() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
 
-  useEffect(() => {
+  const fetchNotes = useCallback(() => {
     setFetching(true);
     getNotes({ category: "board", status: "live" })
       .then(data => { setNotes(data.map(toCard)); setFetching(false); })
       .catch(() => setFetching(false));
   }, []);
+
+  useEffect(() => {
+    fetchNotes();
+    const onVisible = () => { if (document.visibilityState === "visible") fetchNotes(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchNotes]);
 
   const classOptions = boardTab === "CBSE" ? boardTags.cbse : boardTab === "CISCE" ? boardTags.cisce : boardTags.state;
 
@@ -64,6 +71,9 @@ export default function BoardNotes() {
       <div className="flex items-center gap-3 mb-5">
         <button onClick={() => setLocation("/student")} className="text-gray-400 hover:text-white transition text-xs">← Home</button>
         <h1 className="font-black text-xl text-white flex-1">Board Exam Notes</h1>
+        <button onClick={fetchNotes} disabled={fetching} className="text-xs text-gray-400 hover:text-white transition disabled:opacity-40 border border-white/10 rounded-lg px-3 py-1.5 hover:border-white/20">
+          {fetching ? "Loading…" : "Refresh"}
+        </button>
         <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2 w-64">
           <span className="text-gray-400 text-xs">⌕</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes..."
