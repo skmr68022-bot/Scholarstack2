@@ -284,12 +284,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ): Promise<{ success: boolean; error?: string }> => {
     setAuthLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password: password.trim(),
+      // Route through API server so it works even if browser can't reach Supabase directly
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password: password.trim() }),
       });
-      if (error) return { success: false, error: error.message };
-      // Profile + role loading happens via onAuthStateChange — no extra DB call needed here
+      const json = (await res.json()) as {
+        success: boolean;
+        error?: string;
+        access_token?: string;
+        refresh_token?: string;
+      };
+      if (!json.success || !json.access_token || !json.refresh_token) {
+        return { success: false, error: json.error ?? "Login failed." };
+      }
+      // Inject the session so Supabase client is authenticated for subsequent calls
+      await supabase.auth.setSession({
+        access_token: json.access_token,
+        refresh_token: json.refresh_token,
+      });
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Check your connection." };
@@ -343,14 +357,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: json.error };
       }
 
-      // Account created and confirmed — now sign in to get a session
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: data.email.trim().toLowerCase(),
-        password: data.password.trim(),
+      // Account created and confirmed — now sign in via server to get a session
+      const loginRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email.trim().toLowerCase(),
+          password: data.password.trim(),
+        }),
       });
-
-      if (signInError) {
-        return { success: false, error: "Account created! Please sign in with your email and password." };
+      const loginJson = (await loginRes.json()) as {
+        success: boolean;
+        error?: string;
+        access_token?: string;
+        refresh_token?: string;
+      };
+      if (loginJson.success && loginJson.access_token && loginJson.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: loginJson.access_token,
+          refresh_token: loginJson.refresh_token,
+        });
       }
 
       return { success: true };
