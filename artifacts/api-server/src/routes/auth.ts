@@ -117,7 +117,7 @@ async function mcSendOtp(phone: string, token: string): Promise<string | null> {
   if (!cid) return null;
   try {
     const res = await fetch(
-      `https://cpaas.messagecentral.com/verification/v3/send?countryCode=91&customerId=${cid}&flowType=SMS&mobileNumber=${phone}`,
+      `https://cpaas.messagecentral.com/verification/v3/send?countryCode=91&customerId=${cid}&flowType=SMS&mobileNumber=${phone}&otpLength=6`,
       { method: "POST", headers: { authToken: token } },
     );
     const d = await res.json() as { data?: { verificationId?: string }; responseCode?: number; message?: string };
@@ -135,10 +135,14 @@ async function mcVerifyOtp(verificationId: string, code: string, token: string):
       `https://cpaas.messagecentral.com/verification/v3/validateOtp?verificationId=${verificationId}&code=${code}`,
       { method: "GET", headers: { authToken: token } },
     );
-    const d = await res.json() as { data?: { verificationStatus?: string }; verificationStatus?: string };
-    const status = d.data?.verificationStatus ?? (d as Record<string, unknown>)["verificationStatus"];
+    const d = await res.json() as { data?: { verificationStatus?: string }; responseCode?: number; message?: string };
+    console.log(`[MC VerifyOTP] status=${res.status} body=${JSON.stringify(d)}`);
+    const status = d.data?.verificationStatus;
     return status === "VERIFICATION_COMPLETED";
-  } catch { return false; }
+  } catch (e) {
+    console.error(`[MC VerifyOTP] error:`, e);
+    return false;
+  }
 }
 
 async function supabaseLogin(email: string, password: string) {
