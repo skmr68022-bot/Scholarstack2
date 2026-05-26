@@ -1,8 +1,19 @@
 import { Router, type IRouter } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { createHmac } from "crypto";
+import { createHmac, randomInt } from "crypto";
 
 const router: IRouter = Router();
+
+/* ── In-memory store for pending EMAIL OTPs (TTL: 10 min) ── */
+interface EmailOtpEntry {
+  otp: string;
+  name: string;
+  role: string;
+  expertise?: string;
+  password: string;
+  expiry: number;
+}
+const emailOtpStore = new Map<string, EmailOtpEntry>();
 
 /* ── In-memory store for pending phone OTPs (TTL: 10 min) ── */
 interface PhoneOtpEntry {
@@ -13,12 +24,48 @@ interface PhoneOtpEntry {
   expiry: number;
 }
 const phoneOtpStore = new Map<string, PhoneOtpEntry>();
+
 setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of phoneOtpStore.entries()) {
-    if (v.expiry < now) phoneOtpStore.delete(k);
-  }
+  for (const [k, v] of emailOtpStore.entries()) { if (v.expiry < now) emailOtpStore.delete(k); }
+  for (const [k, v] of phoneOtpStore.entries()) { if (v.expiry < now) phoneOtpStore.delete(k); }
 }, 60_000);
+
+/* ── Send email via Resend (falls back to console log for dev) ── */
+async function sendOtpEmail(to: string, otp: string, name: string): Promise<boolean> {
+  const apiKey = process.env["RESEND_API_KEY"];
+
+  if (!apiKey) {
+    // Dev fallback — print OTP to server console
+    console.log(`\n╔══════════════════════════════════╗`);
+    console.log(`  EMAIL OTP for ${to}`);
+    console.log(`  Code: ${otp}`);
+    console.log(`╚══════════════════════════════════╝\n`);
+    return true;
+  }
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "ScholarStack <onboarding@resend.dev>",
+        to: [to],
+        subject: "Your ScholarStack verification code",
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#0d0d12;border-radius:16px;color:#fff">
+            <h2 style="margin:0 0 8px;font-size:22px">Hi ${name},</h2>
+            <p style="color:#aaa;margin:0 0 24px">Your ScholarStack verification code is:</p>
+            <div style="background:#1a1a2e;border-radius:12px;padding:24px;text-align:center;letter-spacing:12px;font-size:36px;font-weight:900;color:#7c3aed">${otp}</div>
+            <p style="color:#666;font-size:13px;margin:24px 0 0">This code expires in 10 minutes. Do not share it with anyone.</p>
+          </div>`,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 /* ── Helpers ── */
 
@@ -111,8 +158,10 @@ async function supabaseLogin(email: string, password: string) {
 
 /* ════════════════════════════════════════════════════════════
    POST /auth/signup
-   Creates an unconfirmed user. Supabase sends a confirmation
-   email containing {{ .Token }} (6-digit OTP).
+   Generates a 6-digit OTP, emails it via Resend (or logs
+   it to console when RESEND_API_KEY is not set), and stores
+   signup data in memory. The Supabase user is NOT created
+   until the OTP is verified — no rate-limit dependency.
    ════════════════════════════════════════════════════════════ */
 router.post("/auth/signup", async (req, res) => {
   const { name, email, password, role, expertise } = req.body as {
@@ -128,53 +177,36 @@ router.post("/auth/signup", async (req, res) => {
     return;
   }
 
-  const adminClient = getAdminClient();
-  if (!adminClient) {
-    res.status(503).json({ success: false, error: "SUPABASE_SERVICE_ROLE_KEY not configured." });
-    return;
-  }
-
   const normalizedEmail = email.trim().toLowerCase();
+  const trimmedName     = name.trim();
 
-  const { data, error } = await adminClient.auth.admin.createUser({
-    email: normalizedEmail,
-    password: password.trim(),
-    email_confirm: false,          // Supabase sends OTP confirmation email
-    user_metadata: { name: name.trim(), role, expertise: expertise ?? null },
-  });
-
-  if (error) {
-    if (error.message?.includes("already") || error.message?.includes("exists") || error.code === "email_exists") {
-      res.json({ success: true, existed: true });
+  // Check if email already exists in Supabase
+  const adminClient = getAdminClient();
+  if (adminClient) {
+    const listResult = await adminClient.auth.admin.listUsers();
+    if ((listResult.data?.users as Array<{ email?: string }> | undefined)?.some(u => u.email === normalizedEmail)) {
+      res.status(400).json({ success: false, error: "An account with this email already exists. Please sign in." });
       return;
     }
-    req.log.error({ error: error.message }, "Admin createUser failed");
-    res.status(400).json({ success: false, error: error.message });
+  }
+
+  // Generate 6-digit OTP and store signup data
+  const otp = String(randomInt(100000, 999999));
+  emailOtpStore.set(normalizedEmail, {
+    otp, name: trimmedName, role, expertise: expertise?.trim(), password: password.trim(),
+    expiry: Date.now() + 10 * 60_000,
+  });
+
+  // Send OTP email
+  const sent = await sendOtpEmail(normalizedEmail, otp, trimmedName);
+  if (!sent) {
+    emailOtpStore.delete(normalizedEmail);
+    res.status(500).json({ success: false, error: "Failed to send verification email. Please try again." });
     return;
   }
 
-  const userId = data.user?.id;
-  if (userId) {
-    await adminClient.from("profiles").upsert(
-      { id: userId, name: name.trim(), email: normalizedEmail, role, expertise: expertise ?? null, is_verified: false },
-      { onConflict: "id" },
-    );
-  }
-
-  // Explicitly send OTP email (works even when Supabase "Confirm email" is disabled)
-  const otpRes = await fetch(`${process.env["SUPABASE_URL"]}/auth/v1/otp`, {
-    method: "POST",
-    headers: { apikey: process.env["SUPABASE_ANON_KEY"]!, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: normalizedEmail, create_user: false }),
-  });
-  if (!otpRes.ok) {
-    const otpErr = await otpRes.json() as { error?: string; error_description?: string; msg?: string };
-    req.log.error({ otpErr }, "Failed to send OTP email after user creation");
-    // Don't fail the signup — user exists, just warn
-  }
-
-  req.log.info({ userId, role }, "User created — OTP email triggered");
-  res.json({ success: true, requiresOtp: true, userId });
+  req.log.info({ email: normalizedEmail, role }, "Email OTP sent for signup");
+  res.json({ success: true, requiresOtp: true });
 });
 
 /* ════════════════════════════════════════════════════════════
@@ -226,8 +258,10 @@ router.post("/auth/login", async (req, res) => {
 
 /* ════════════════════════════════════════════════════════════
    POST /auth/verify-email-otp
-   Verifies the 6-digit code from the Supabase signup email.
-   Returns a full session on success.
+   Verifies the 6-digit OTP we generated. On success:
+   1. Creates the Supabase user (email_confirm: true)
+   2. Upserts their profile
+   3. Logs in and returns the session
    ════════════════════════════════════════════════════════════ */
 router.post("/auth/verify-email-otp", async (req, res) => {
   const { email, token } = req.body as { email?: string; token?: string };
@@ -236,42 +270,63 @@ router.post("/auth/verify-email-otp", async (req, res) => {
     return;
   }
 
-  const url     = process.env["SUPABASE_URL"];
-  const anonKey = process.env["SUPABASE_ANON_KEY"];
-  if (!url || !anonKey) {
-    res.status(503).json({ success: false, error: "Supabase not configured." });
+  const normalizedEmail = email.trim().toLowerCase();
+  const pending = emailOtpStore.get(normalizedEmail);
+
+  if (!pending) {
+    res.status(400).json({ success: false, error: "No pending signup found. Please start the signup again." });
+    return;
+  }
+  if (pending.expiry < Date.now()) {
+    emailOtpStore.delete(normalizedEmail);
+    res.status(400).json({ success: false, error: "OTP has expired. Please sign up again." });
+    return;
+  }
+  if (token.trim() !== pending.otp) {
+    res.status(400).json({ success: false, error: "Incorrect code. Please try again." });
     return;
   }
 
-  const response = await fetch(`${url}/auth/v1/verify`, {
-    method: "POST",
-    headers: { apikey: anonKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "email", email: email.trim().toLowerCase(), token: token.trim() }),
-  });
+  // OTP correct — create the Supabase user now
+  emailOtpStore.delete(normalizedEmail);
 
-  const data = await response.json() as {
-    access_token?: string; refresh_token?: string;
-    expires_in?: number; expires_at?: number; token_type?: string;
-    user?: { id: string; email?: string };
-    error?: string; error_description?: string;
-  };
-
-  if (!response.ok || !data.access_token) {
-    const msg = data.error_description ?? data.error ?? "Invalid or expired OTP.";
-    req.log.error({ email, msg }, "Email OTP verification failed");
-    res.status(400).json({ success: false, error: msg });
+  const adminClient = getAdminClient();
+  if (!adminClient) {
+    res.status(503).json({ success: false, error: "SUPABASE_SERVICE_ROLE_KEY not configured." });
     return;
   }
 
-  req.log.info({ userId: data.user?.id }, "Email OTP verified — session issued");
-  res.json({
-    success: true,
-    session: {
-      access_token: data.access_token, refresh_token: data.refresh_token,
-      expires_in: data.expires_in, expires_at: data.expires_at,
-      token_type: data.token_type ?? "bearer", user: data.user,
-    },
+  const { data, error } = await adminClient.auth.admin.createUser({
+    email: normalizedEmail,
+    password: pending.password,
+    email_confirm: true,
+    user_metadata: { name: pending.name, role: pending.role, expertise: pending.expertise ?? null },
   });
+
+  if (error) {
+    req.log.error({ error: error.message }, "createUser after OTP failed");
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  const userId = data.user?.id;
+  if (userId) {
+    await adminClient.from("profiles").upsert(
+      { id: userId, name: pending.name, email: normalizedEmail, role: pending.role, expertise: pending.expertise ?? null, is_verified: true },
+      { onConflict: "id" },
+    );
+  }
+
+  // Log in to get the session
+  const { session, error: loginErr } = await supabaseLogin(normalizedEmail, pending.password);
+  if (!session) {
+    req.log.error({ loginErr }, "Login after OTP verify failed");
+    res.status(500).json({ success: false, error: "Account created but sign-in failed. Please use the Sign In tab." });
+    return;
+  }
+
+  req.log.info({ userId, role: pending.role }, "Email OTP verified — user created and session issued");
+  res.json({ success: true, session });
 });
 
 /* ════════════════════════════════════════════════════════════
