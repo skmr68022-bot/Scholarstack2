@@ -1,9 +1,9 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useApp } from "../../context/AppContext";
-import { getScholarProfiles } from "../../lib/db";
-import type { Profile } from "../../lib/database.types";
+import { getScholarProfiles, getRecentNotes } from "../../lib/db";
+import type { Profile, Note } from "../../lib/database.types";
 
 const EXAM_DATES: { name: string; iso: string; c: string }[] = [
   { name: "UPSC Prelims", iso: "2026-06-01", c: "from-orange-500 to-red-500" },
@@ -38,10 +38,19 @@ export default function StudentHome() {
   const [, setLocation] = useLocation();
   const { currentUser, purchased } = useApp();
   const [scholars, setScholars] = useState<Profile[]>([]);
+  const [recentNotes, setRecentNotes] = useState<Note[]>([]);
+
+  const fetchRecent = useCallback(() => {
+    getRecentNotes(8).then(setRecentNotes).catch(() => {});
+  }, []);
 
   useEffect(() => {
     getScholarProfiles(4).then(setScholars).catch(() => {});
-  }, []);
+    fetchRecent();
+    const onVisible = () => { if (document.visibilityState === "visible") fetchRecent(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchRecent]);
 
   const firstName = currentUser?.name?.split(" ")[0] ?? "there";
 
@@ -115,6 +124,40 @@ export default function StudentHome() {
           </button>
         ))}
       </div>
+
+      {/* Recently Added */}
+      {recentNotes.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-sm text-white">Recently Added</h2>
+            <span className="text-[10px] text-gray-500">{recentNotes.length} new</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {recentNotes.map(n => (
+              <button
+                key={n.id}
+                onClick={() => setLocation(`/student/notes/${n.id}`)}
+                className="shrink-0 w-44 bg-[#13131a] border border-white/8 rounded-2xl overflow-hidden hover:border-violet-500/30 hover:scale-[1.02] transition-all duration-200 text-left"
+              >
+                <div className={`h-20 ${n.color} relative flex items-end p-2.5`}>
+                  <div className="absolute inset-0 bg-black/20" />
+                  <div className="relative z-10 flex gap-1 flex-wrap">
+                    <span className="inline-block bg-green-500/90 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">New</span>
+                    {n.category && (
+                      <span className="inline-block bg-black/50 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full capitalize">{n.category}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-2.5">
+                  <p className="font-bold text-[10px] text-white line-clamp-2 mb-1 leading-snug">{n.title}</p>
+                  <p className="text-[9px] text-gray-400 truncate mb-1.5">{n.scholar_name}</p>
+                  <p className="text-xs font-black text-violet-400">{n.price}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top scholars */}
       <h2 className="font-bold text-sm text-white mb-3">Top Scholars</h2>

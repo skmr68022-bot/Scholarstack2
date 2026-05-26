@@ -53,6 +53,16 @@ export async function getNotes(filters?: {
   return ((data as Note[]) ?? []);
 }
 
+export async function getRecentNotes(limit = 8): Promise<Note[]> {
+  const { data } = await supabase
+    .from("notes")
+    .select("*")
+    .eq("status", "live")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return ((data as Note[]) ?? []);
+}
+
 export async function getScholarProfiles(limit = 6): Promise<Profile[]> {
   const { data } = await supabase
     .from("profiles")
