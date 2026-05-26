@@ -555,8 +555,8 @@ export default function Auth() {
                         {showPw ? "Hide" : "Show"}
                       </button>
                     </div>
-                    {/* Forgot password link — only shown on Sign In tab */}
-                    {mode === "login" && !isAdmin && (
+                    {/* Forgot password link — shown on Sign In tab and admin login */}
+                    {(mode === "login" || isAdmin) && (
                       <button
                         onClick={() => { setStep("forgot_email"); setForgotEmail(email); setError(""); setInfo(""); }}
                         className={`mt-1.5 text-xs ${accentText} hover:underline float-right`}>
