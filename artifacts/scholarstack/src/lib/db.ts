@@ -132,7 +132,22 @@ export async function addPurchase(
     amount,
     payment_method: method,
   });
-  return error ? { success: false, error: error.message } : { success: true };
+  if (error) return { success: false, error: error.message };
+
+  // Increment the note's sales_count so scholar earnings/analytics stay accurate
+  const { data: note } = await supabase
+    .from("notes")
+    .select("sales_count")
+    .eq("id", noteId)
+    .single();
+  if (note) {
+    await supabase
+      .from("notes")
+      .update({ sales_count: ((note as { sales_count: number }).sales_count ?? 0) + 1 })
+      .eq("id", noteId);
+  }
+
+  return { success: true };
 }
 
 /* ─── Bookmarks ───────────────────────────────────────────── */
