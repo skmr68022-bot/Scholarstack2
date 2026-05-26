@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
@@ -37,14 +37,27 @@ export default function Auth() {
 
   /* Forgot password flow */
   const [forgotEmail, setForgotEmail]   = useState("");
-  const [forgotOtp, setForgotOtp]       = useState("");
   const [newPw, setNewPw]               = useState("");
   const [confirmPw, setConfirmPw]       = useState("");
   const [showNewPw, setShowNewPw]       = useState(false);
+  const [isRecovery, setIsRecovery]     = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [info, setInfo]       = useState("");
+
+  /* Detect Supabase PASSWORD_RECOVERY event (from reset-link email click) */
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+        setStep("forgot_reset");
+        setError("");
+        setInfo("Enter your new password below.");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const isScholar = role === "scholar";
   const isAdmin   = role === "admin";
@@ -171,7 +184,7 @@ export default function Auth() {
     else { setError(friendlyError(result.error ?? "Verification failed.")); }
   };
 
-  /* ── Forgot password: send OTP ── */
+  /* ── Forgot password: send reset link via Supabase ── */
   const handleForgotSend = async () => {
     setError(""); setInfo("");
     const trimEmail = forgotEmail.trim().toLowerCase();
@@ -179,55 +192,32 @@ export default function Auth() {
       setError("Please enter a valid email address."); return;
     }
     setLoading(true);
-    try {
-      const res = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimEmail }),
-      });
-      const json = await res.json() as { success: boolean; error?: string };
-      setLoading(false);
-      if (json.success) {
-        setStep("forgot_reset");
-        setInfo("If an account exists with this email, a 6-digit reset code has been sent.");
-      } else {
-        setError(json.error ?? "Failed to send reset code. Please try again.");
-      }
-    } catch {
-      setLoading(false);
-      setError("Network error. Please check your connection.");
+    const { error } = await supabase.auth.resetPasswordForEmail(trimEmail, {
+      redirectTo: window.location.href.split("#")[0],
+    });
+    setLoading(false);
+    if (error) {
+      setError(friendlyError(error.message));
+    } else {
+      setInfo("Reset link sent! Check your inbox (and spam folder). Click the link in the email — it will bring you back here to set a new password.");
     }
   };
 
-  /* ── Forgot password: verify OTP + set new password ── */
+  /* ── Forgot password: set new password (after recovery link clicked) ── */
   const handleForgotReset = async () => {
     setError(""); setInfo("");
-    if (forgotOtp.trim().length < 6) { setError("Please enter the 6-digit code from your email."); return; }
     if (!newPw.trim() || newPw.length < 6) { setError("New password must be at least 6 characters."); return; }
     if (newPw !== confirmPw) { setError("Passwords do not match."); return; }
     setLoading(true);
-    try {
-      const res = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase(), token: forgotOtp.trim(), newPassword: newPw.trim() }),
-      });
-      const json = await res.json() as { success: boolean; error?: string; session?: Record<string, unknown> };
-      setLoading(false);
-      if (json.success && json.session) {
-        window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
-        await supabase.auth.setSession({ access_token: json.session.access_token as string, refresh_token: json.session.refresh_token as string }).catch(() => {});
-        redirectAfterAuth();
-      } else if (json.success) {
-        setStep("form"); setMode("login");
-        setError(""); setInfo("Password reset! Please sign in with your new password.");
-        setForgotEmail(""); setForgotOtp(""); setNewPw(""); setConfirmPw("");
-      } else {
-        setError(friendlyError(json.error ?? "Reset failed. Please try again."));
-      }
-    } catch {
-      setLoading(false);
-      setError("Network error. Please check your connection.");
+    const { error } = await supabase.auth.updateUser({ password: newPw.trim() });
+    setLoading(false);
+    if (error) {
+      setError(friendlyError(error.message));
+    } else {
+      await supabase.auth.signOut();
+      setStep("form"); setMode("login");
+      setError(""); setInfo("Password updated! Please sign in with your new password.");
+      setForgotEmail(""); setNewPw(""); setConfirmPw(""); setIsRecovery(false);
     }
   };
 
@@ -359,7 +349,7 @@ export default function Auth() {
             <div>
               <h2 className="text-2xl font-black text-white mb-1">Reset Password</h2>
               <p className="text-sm text-gray-400 mb-6">
-                Enter your account email — we'll send a 6-digit reset code.
+                Enter your account email — we'll send a password reset link.
               </p>
               <div className="space-y-4">
                 <div>
@@ -373,13 +363,21 @@ export default function Auth() {
                   />
                 </div>
                 {error && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 leading-relaxed">{error}</div>}
-                {info  && <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">{info}</div>}
-                <button onClick={handleForgotSend} disabled={loading || !forgotEmail.trim()}
-                  className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg disabled:opacity-60`}>
-                  {loading
-                    ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending…</span>
-                    : "Send Reset Code →"}
-                </button>
+                {info  && <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5 leading-relaxed">{info}</div>}
+                {!info && (
+                  <button onClick={handleForgotSend} disabled={loading || !forgotEmail.trim()}
+                    className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg disabled:opacity-60`}>
+                    {loading
+                      ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending…</span>
+                      : "Send Reset Link →"}
+                  </button>
+                )}
+                {info && (
+                  <button onClick={handleForgotSend} disabled={loading}
+                    className="w-full py-3 rounded-2xl border border-white/10 text-gray-400 hover:text-white text-sm font-semibold transition">
+                    {loading ? "Sending…" : "Resend link"}
+                  </button>
+                )}
                 <button onClick={() => { setStep("form"); setError(""); setInfo(""); setForgotEmail(""); }}
                   className="w-full text-xs text-gray-500 hover:text-gray-300 transition">
                   ← Back to Sign In
@@ -388,63 +386,63 @@ export default function Auth() {
             </div>
           )}
 
-          {/* ── FORGOT PASSWORD: enter OTP + new password ── */}
+          {/* ── FORGOT PASSWORD: set new password (after recovery link click) ── */}
           {step === "forgot_reset" && (
             <div>
               <h2 className="text-2xl font-black text-white mb-1">Set New Password</h2>
               <p className="text-sm text-gray-400 mb-6">
-                Enter the code sent to <span className="text-white font-semibold">{forgotEmail}</span> and choose a new password.
+                {isRecovery
+                  ? "Choose a new password for your account."
+                  : "Click the reset link in your email to continue. This page will update automatically once you click it."}
               </p>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-gray-400 font-semibold block mb-2">6-digit Reset Code</label>
-                  <input
-                    value={forgotOtp}
-                    onChange={e => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
-                    placeholder="Enter 6-digit code"
-                    maxLength={6}
-                    className={`${inp} text-center text-xl tracking-[0.4em] font-black`}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 font-semibold block mb-2">New Password</label>
-                  <div className="relative">
-                    <input
-                      value={newPw}
-                      onChange={e => { setNewPw(e.target.value); setError(""); }}
-                      placeholder="Min 6 characters"
-                      type={showNewPw ? "text" : "password"}
-                      className={`${inp} pr-14`}
-                    />
-                    <button onClick={() => setShowNewPw(!showNewPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs font-semibold">
-                      {showNewPw ? "Hide" : "Show"}
-                    </button>
+              {isRecovery && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs text-gray-400 font-semibold block mb-2">New Password</label>
+                    <div className="relative">
+                      <input
+                        value={newPw}
+                        onChange={e => { setNewPw(e.target.value); setError(""); }}
+                        placeholder="Min 6 characters"
+                        type={showNewPw ? "text" : "password"}
+                        className={`${inp} pr-14`}
+                      />
+                      <button onClick={() => setShowNewPw(!showNewPw)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs font-semibold">
+                        {showNewPw ? "Hide" : "Show"}
+                      </button>
+                    </div>
                   </div>
+                  <div>
+                    <label className="text-xs text-gray-400 font-semibold block mb-2">Confirm Password</label>
+                    <input
+                      value={confirmPw}
+                      onChange={e => { setConfirmPw(e.target.value); setError(""); }}
+                      placeholder="Re-enter new password"
+                      type={showNewPw ? "text" : "password"}
+                      className={inp}
+                    />
+                  </div>
+                  {error && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 leading-relaxed">{error}</div>}
+                  {info  && <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">{info}</div>}
+                  <button onClick={handleForgotReset} disabled={loading || !newPw || !confirmPw}
+                    className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg disabled:opacity-60`}>
+                    {loading
+                      ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Updating…</span>
+                      : "Update Password →"}
+                  </button>
                 </div>
-                <div>
-                  <label className="text-xs text-gray-400 font-semibold block mb-2">Confirm Password</label>
-                  <input
-                    value={confirmPw}
-                    onChange={e => { setConfirmPw(e.target.value); setError(""); }}
-                    placeholder="Re-enter new password"
-                    type={showNewPw ? "text" : "password"}
-                    className={inp}
-                  />
+              )}
+              {!isRecovery && (
+                <div className="space-y-4">
+                  {info && <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5 leading-relaxed">{info}</div>}
+                  {error && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 leading-relaxed">{error}</div>}
                 </div>
-                {error && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 leading-relaxed">{error}</div>}
-                {info  && <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">{info}</div>}
-                <button onClick={handleForgotReset} disabled={loading || forgotOtp.length < 6 || !newPw || !confirmPw}
-                  className={`w-full py-3.5 rounded-2xl bg-gradient-to-r ${accent} text-white font-bold text-sm hover:opacity-90 transition shadow-lg disabled:opacity-60`}>
-                  {loading
-                    ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Resetting…</span>
-                    : "Reset Password →"}
-                </button>
-                <button onClick={() => { setStep("forgot_email"); setForgotOtp(""); setNewPw(""); setConfirmPw(""); setError(""); setInfo(""); }}
-                  className="w-full text-xs text-gray-500 hover:text-gray-300 transition">
-                  ← Resend code
-                </button>
-              </div>
+              )}
+              <button onClick={() => { setStep("forgot_email"); setNewPw(""); setConfirmPw(""); setError(""); setInfo(""); }}
+                className="w-full mt-4 text-xs text-gray-500 hover:text-gray-300 transition">
+                ← Back / Resend link
+              </button>
             </div>
           )}
 
