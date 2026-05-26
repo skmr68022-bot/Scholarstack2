@@ -24,7 +24,7 @@ export default function RoleSelect() {
         <h2 className="text-3xl font-black text-white mb-2">Welcome! Who are you?</h2>
         <p className="text-gray-400 mb-8 text-sm">Select your role to get a personalized experience</p>
 
-        <div className="grid grid-cols-2 gap-4 mb-5">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           {[
             {
               role: "student" as const,
@@ -66,6 +66,12 @@ export default function RoleSelect() {
             </button>
           ))}
         </div>
+
+        <button
+          onClick={() => choose("admin")}
+          className="text-xs text-gray-600 hover:text-gray-400 transition-colors py-1">
+          Admin Sign In
+        </button>
       </div>
     </div>
   );
