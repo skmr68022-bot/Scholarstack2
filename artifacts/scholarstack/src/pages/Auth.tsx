@@ -56,9 +56,8 @@ export default function Auth() {
   const roleLabel   = isAdmin ? "Admin" : isScholar ? "Scholar" : "Student";
 
   const redirectAfterAuth = () => {
-    const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
     const path = isAdmin ? "/admin" : isScholar ? "/scholar" : "/student";
-    window.location.href = `${base}${path}`;
+    setLocation(path);
   };
 
   const friendlyError = (msg: string): string => {
