@@ -73,6 +73,9 @@ interface AppContextType {
   authLoading: boolean;
   login: (email: string, password: string, loginRole: "student" | "scholar" | "admin") => Promise<{ success: boolean; error?: string }>;
   signup: (data: { name: string; email: string; password: string; phone?: string; role: "student" | "scholar"; expertise?: string }) => Promise<{ success: boolean; error?: string }>;
+  verifyEmailOtp: (email: string, token: string) => Promise<{ success: boolean; error?: string }>;
+  sendPhoneOtp: (phone: string, name?: string, role?: string, expertise?: string) => Promise<{ success: boolean; error?: string }>;
+  verifyPhoneOtp: (phone: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   signupWithPhone: (data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }) => Promise<{ success: boolean; error?: string }>;
   loginWithPhone: (phone: string, role: "student" | "scholar") => Promise<{ success: boolean; error?: string }>;
   completePhoneLogin: (phone: string, role: "student" | "scholar") => Promise<{ success: boolean; error?: string }>;
@@ -389,34 +392,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: json.error };
       }
 
-      // Account created and confirmed — now sign in via server to get a session
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: data.email.trim().toLowerCase(),
-          password: data.password.trim(),
-        }),
-      });
-      const loginJson = (await loginRes.json()) as {
-        success: boolean;
-        error?: string;
-        session?: {
-          access_token: string;
-          refresh_token: string;
-          expires_in: number;
-          expires_at: number;
-          token_type: string;
-          user: { id: string; email?: string };
-        };
-      };
-      if (!loginJson.success || !loginJson.session) {
-        return {
-          success: false,
-          error: "Account created — please switch to Sign In and log in.",
-        };
-      }
-      window.localStorage.setItem("ss_auth_v2", JSON.stringify(loginJson.session));
+      // Account created — caller will now show email OTP verification step
       return { success: true };
     } catch {
       return { success: false, error: "Network error. Please check your connection and try again." };
@@ -425,33 +401,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signupWithPhone = async (_data: {
-    name: string;
-    phone: string;
-    role: "student" | "scholar";
-    expertise?: string;
-  }): Promise<{ success: boolean; error?: string }> => {
-    return {
-      success: false,
-      error: "Phone authentication requires SMS provider setup. Please use email signup.",
-    };
+  /* ── Email OTP verify ── */
+  const verifyEmailOtp = async (email: string, token: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch("/api/auth/verify-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), token: token.trim() }),
+      });
+      const json = (await res.json()) as {
+        success: boolean; error?: string;
+        session?: { access_token: string; refresh_token: string; expires_in: number; expires_at: number; token_type: string; user: { id: string; email?: string } };
+      };
+      if (!json.success || !json.session) return { success: false, error: json.error ?? "Verification failed." };
+      window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error. Please check your connection." };
+    }
   };
 
-  const loginWithPhone = async (
-    _phone: string,
-    _loginRole: "student" | "scholar",
-  ): Promise<{ success: boolean; error?: string }> => {
-    return {
-      success: false,
-      error: "Phone authentication requires SMS provider setup. Please use email login.",
-    };
+  /* ── Phone OTP: send ── */
+  const sendPhoneOtp = async (phone: string, name?: string, role?: string, expertise?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch("/api/auth/send-phone-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, name, role, expertise }),
+      });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      return json;
+    } catch {
+      return { success: false, error: "Network error. Please check your connection." };
+    }
   };
 
-  const completePhoneLogin = async (
-    _phone: string,
-    _loginRole: "student" | "scholar",
-  ): Promise<{ success: boolean; error?: string }> => {
-    return { success: false, error: "Phone authentication not configured." };
+  /* ── Phone OTP: verify ── */
+  const verifyPhoneOtp = async (phone: string, otp: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch("/api/auth/verify-phone-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, otp }),
+      });
+      const json = (await res.json()) as {
+        success: boolean; error?: string;
+        session?: { access_token: string; refresh_token: string; expires_in: number; expires_at: number; token_type: string; user: { id: string; email?: string } };
+      };
+      if (!json.success || !json.session) return { success: false, error: json.error ?? "Verification failed." };
+      window.localStorage.setItem("ss_auth_v2", JSON.stringify(json.session));
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error. Please check your connection." };
+    }
+  };
+
+  const signupWithPhone = async (_data: { name: string; phone: string; role: "student" | "scholar"; expertise?: string }): Promise<{ success: boolean; error?: string }> => {
+    return { success: false, error: "Use the Mobile OTP tab to sign up with phone." };
+  };
+  const loginWithPhone = async (_phone: string, _loginRole: "student" | "scholar"): Promise<{ success: boolean; error?: string }> => {
+    return { success: false, error: "Use the Mobile OTP tab to sign in with phone." };
+  };
+  const completePhoneLogin = async (_phone: string, _loginRole: "student" | "scholar"): Promise<{ success: boolean; error?: string }> => {
+    return { success: false, error: "Use the Mobile OTP tab." };
   };
 
   const logout = async () => {
@@ -591,6 +603,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         authLoading,
         login,
         signup,
+        verifyEmailOtp,
+        sendPhoneOtp,
+        verifyPhoneOtp,
         signupWithPhone,
         loginWithPhone,
         completePhoneLogin,
