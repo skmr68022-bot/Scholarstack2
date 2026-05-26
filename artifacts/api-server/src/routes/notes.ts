@@ -11,6 +11,41 @@ function getAdminClient() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   GET /api/notes
+   Returns notes using the service-role key (bypasses RLS).
+   Query params:
+     scholarId  — filter by scholar_id (for scholar dashboard)
+     status     — filter by status
+     all=true   — return all notes (for admin)
+   ════════════════════════════════════════════════════════════ */
+router.get("/notes", async (req, res) => {
+  const { scholarId, status, all } = req.query as {
+    scholarId?: string; status?: string; all?: string;
+  };
+
+  const adminClient = getAdminClient();
+  if (!adminClient) {
+    res.status(503).json({ success: false, error: "Server configuration error." });
+    return;
+  }
+
+  let q = adminClient.from("notes").select("*");
+  if (scholarId) q = q.eq("scholar_id", scholarId);
+  if (status)   q = q.eq("status", status);
+  // If neither all=true nor scholarId, return only live notes by default
+  if (!all && !scholarId) q = q.eq("status", "live");
+
+  const { data, error } = await q.order("created_at", { ascending: false });
+  if (error) {
+    req.log.error({ error: error.message }, "GET /notes query failed");
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  res.json({ success: true, notes: data ?? [] });
+});
+
+/* ════════════════════════════════════════════════════════════
    POST /api/notes
    Inserts a new note using the service role key so that
    RLS policies (which require auth.uid() = scholar_id)

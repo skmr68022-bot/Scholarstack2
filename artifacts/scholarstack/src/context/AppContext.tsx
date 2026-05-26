@@ -106,7 +106,7 @@ interface AppContextType {
   bookmarked: Set<number>;
   toggleBookmark: (noteId: number) => Promise<void>;
   uploads: UploadItem[];
-  addUpload: (item: UploadItem & { fileUrl?: string }) => Promise<{ success: boolean; error?: string }>;
+  addUpload: (item: UploadItem & { fileUrl?: string; thumbnailUrl?: string }) => Promise<{ success: boolean; error?: string }>;
   approveContent: (id: number) => Promise<void>;
   rejectContent: (id: number) => Promise<void>;
   pendingScholars: PendingScholar[];
@@ -217,16 +217,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setBookmarked(new Set(bIds));
     }
     if (profile.role === "scholar") {
-      const notes = await getNotes({ scholarId: profile.id });
-      setUploads(notes.map(noteToUploadItem));
+      // Use server endpoint (service-role key) so RLS cannot block phone-auth scholars
+      try {
+        const res = await fetch(`/api/notes?scholarId=${profile.id}`);
+        const json = await res.json() as { success: boolean; notes?: Note[] };
+        if (json.success && json.notes) {
+          setUploads(json.notes.map(noteToUploadItem));
+        }
+      } catch {
+        // Fallback to direct DB call (requires valid Supabase session)
+        const notes = await getNotes({ scholarId: profile.id });
+        setUploads(notes.map(noteToUploadItem));
+      }
     }
     if (profile.role === "admin") {
-      const [allNotes, allProfiles, approvals] = await Promise.all([
-        getAllNotes(),
+      // Use server endpoint (service-role key) for all notes + Supabase client for profiles/approvals
+      const [notesRes, allProfiles, approvals] = await Promise.all([
+        fetch("/api/notes?all=true").then(r => r.json() as Promise<{ success: boolean; notes?: Note[] }>),
         getAllProfiles(),
         getPendingScholars(),
       ]);
-      setUploads(allNotes.map(noteToUploadItem));
+      setUploads((notesRes.success && notesRes.notes ? notesRes.notes : await getAllNotes()).map(noteToUploadItem));
       setUsers(allProfiles.map(profileToAdminUser));
       setPendingScholars(
         (approvals as ScholarApproval[]).map(approvalToPendingScholar),
@@ -520,7 +531,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /* ── Uploads ── */
 
   const addUpload = async (
-    item: UploadItem & { fileUrl?: string },
+    item: UploadItem & { fileUrl?: string; thumbnailUrl?: string },
   ): Promise<{ success: boolean; error?: string }> => {
     if (!currentUser) return { success: false, error: "Not logged in." };
 
@@ -548,7 +559,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           content_type: item.type ?? "PDF",
           status: "review",
           file_url: item.fileUrl ?? null,
-          thumbnail_url: null,
+          thumbnail_url: item.thumbnailUrl ?? null,
         }),
       });
       const json = await res.json() as { success: boolean; error?: string; note?: Note };

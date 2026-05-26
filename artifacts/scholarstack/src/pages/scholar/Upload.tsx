@@ -49,8 +49,8 @@ export default function Upload() {
 
     try {
       if (selectedFile) {
-        setUploadProgress(type === "PDF" ? "Uploading PDF…" : "Uploading video…");
-        if (type === "PDF") {
+        setUploadProgress(type === "PDF" || type === "Bundle" ? "Uploading PDF…" : "Uploading video…");
+        if (type === "PDF" || type === "Bundle") {
           fileUrl = await uploadPDF(selectedFile, currentUser.id);
         } else {
           fileUrl = await uploadVideo(selectedFile, currentUser.id);
@@ -63,6 +63,7 @@ export default function Upload() {
       setUploadProgress("Saving to database…");
 
       const result = await addUpload({
+        thumbnailUrl,
         id: Date.now(),
         title,
         type,
@@ -233,7 +234,7 @@ export default function Upload() {
         <div className="space-y-3">
           <div>
             <input ref={fileRef} type="file" className="hidden"
-              accept={type === "PDF" ? ".pdf" : "video/*"}
+              accept={type === "PDF" || type === "Bundle" ? "application/pdf,.pdf" : "video/*"}
               onChange={e => setSelectedFile(e.target.files?.[0] ?? null)} />
             <button onClick={() => fileRef.current?.click()}
               className="w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2">

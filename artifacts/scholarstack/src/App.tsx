@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider, useApp } from "./context/AppContext";
@@ -35,6 +36,14 @@ function RequireAuth({ children, requiredRole }: { children: React.ReactNode; re
   const { currentUser, loading } = useApp();
   const [, setLocation] = useLocation();
 
+  const shouldRedirect = !loading && (!currentUser || currentUser.role !== requiredRole);
+
+  useEffect(() => {
+    if (shouldRedirect) {
+      setLocation(`/auth/${requiredRole}`);
+    }
+  }, [shouldRedirect, requiredRole, setLocation]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#070709]">
@@ -42,14 +51,7 @@ function RequireAuth({ children, requiredRole }: { children: React.ReactNode; re
       </div>
     );
   }
-  if (!currentUser) {
-    setLocation(`/auth/${requiredRole}`);
-    return null;
-  }
-  if (currentUser.role !== requiredRole) {
-    setLocation(`/auth/${requiredRole}`);
-    return null;
-  }
+  if (shouldRedirect) return null;
   return <>{children}</>;
 }
 
