@@ -213,50 +213,39 @@ export default function VideoUpload() {
 
         {/* Video file */}
         <div>
-          <label
-            className={`relative w-full py-5 rounded-xl border-2 border-dashed transition flex flex-col items-center justify-center gap-2 cursor-pointer overflow-hidden ${
-              selectedVideo ? "border-purple-500/50 bg-purple-600/10" : "border-white/15 hover:border-purple-500/40 hover:bg-purple-600/5"
-            }`}
-          >
-            <input
-              type="file"
-              accept="video/*"
-              onChange={e => setSelectedVideo(e.target.files?.[0] ?? null)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <span className="text-2xl">{selectedVideo ? "▶" : "+"}</span>
-            <div className="text-center">
-              {selectedVideo ? (
-                <>
-                  <p className="text-xs font-semibold text-purple-300">{selectedVideo.name}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{formatSize(selectedVideo.size)}</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs font-semibold text-gray-300">Choose video file</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">MP4, MOV, AVI — up to 500MB</p>
-                </>
-              )}
-            </div>
-          </label>
+          <p className="text-[10px] text-gray-500 mb-1.5">Video file</p>
+          <input
+            type="file"
+            accept="video/*"
+            onChange={e => setSelectedVideo(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-gray-400 cursor-pointer
+              file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+              file:text-xs file:font-semibold file:cursor-pointer
+              file:bg-purple-600/30 file:text-purple-300
+              hover:file:bg-purple-600/50"
+          />
+          {selectedVideo && (
+            <p className="text-[10px] text-purple-400 mt-1 truncate">
+              {selectedVideo.name} — {formatSize(selectedVideo.size)}
+            </p>
+          )}
+          {!selectedVideo && <p className="text-[10px] text-gray-600 mt-1">MP4, MOV, AVI — up to 500MB</p>}
         </div>
 
         {/* Thumbnail */}
         <div>
-          <label
-            className={`relative w-full py-3 rounded-xl border border-dashed transition flex items-center justify-center gap-2 text-xs cursor-pointer overflow-hidden ${
-              selectedThumb ? "border-purple-500/40 text-purple-300" : "border-white/15 text-gray-400 hover:text-white hover:border-white/30"
-            }`}
-          >
-            <input
-              type="file"
-              accept="image/*"
-              onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <span>🖼</span>
-            {selectedThumb ? selectedThumb.name : "Choose thumbnail image (optional)"}
-          </label>
+          <p className="text-[10px] text-gray-500 mb-1.5">Thumbnail image (optional)</p>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-gray-400 cursor-pointer
+              file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+              file:text-xs file:font-semibold file:cursor-pointer
+              file:bg-white/10 file:text-gray-300
+              hover:file:bg-white/20"
+          />
+          {selectedThumb && <p className="text-[10px] text-gray-400 mt-1 truncate">{selectedThumb.name}</p>}
         </div>
 
         <p className="text-[10px] text-gray-500">Video reels are free for students — great for building your audience and getting discovered.</p>

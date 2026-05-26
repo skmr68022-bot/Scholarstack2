@@ -231,28 +231,32 @@ export default function Upload() {
         <p className="text-xs text-gray-400 font-semibold mb-3">Upload Files <span className="text-gray-600">(optional)</span></p>
         <div className="space-y-3">
           <div>
-            <label className="relative w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer overflow-hidden">
-              <input
-                type="file"
-                accept={type === "PDF" || type === "Bundle" ? "application/pdf,.pdf" : "video/*"}
-                onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              <span>📎</span>
-              {selectedFile ? selectedFile.name : `Choose ${type} file`}
-            </label>
+            <p className="text-[10px] text-gray-500 mb-1.5">{type} file</p>
+            <input
+              type="file"
+              accept={type === "PDF" || type === "Bundle" ? "application/pdf,.pdf" : "video/*"}
+              onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-xs text-gray-400 cursor-pointer
+                file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+                file:text-xs file:font-semibold file:cursor-pointer
+                file:bg-cyan-600/30 file:text-cyan-300
+                hover:file:bg-cyan-600/50"
+            />
+            {selectedFile && <p className="text-[10px] text-cyan-400 mt-1 truncate">{selectedFile.name}</p>}
           </div>
           <div>
-            <label className="relative w-full py-3 rounded-xl border border-dashed border-white/20 text-xs text-gray-400 hover:text-white hover:border-cyan-500/50 transition flex items-center justify-center gap-2 cursor-pointer overflow-hidden">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              <span>🖼</span>
-              {selectedThumb ? selectedThumb.name : "Choose thumbnail image (optional)"}
-            </label>
+            <p className="text-[10px] text-gray-500 mb-1.5">Thumbnail image (optional)</p>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => setSelectedThumb(e.target.files?.[0] ?? null)}
+              className="block w-full text-xs text-gray-400 cursor-pointer
+                file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+                file:text-xs file:font-semibold file:cursor-pointer
+                file:bg-white/10 file:text-gray-300
+                hover:file:bg-white/20"
+            />
+            {selectedThumb && <p className="text-[10px] text-gray-400 mt-1 truncate">{selectedThumb.name}</p>}
           </div>
         </div>
       </section>
