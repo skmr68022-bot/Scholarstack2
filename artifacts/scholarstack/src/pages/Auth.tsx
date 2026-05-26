@@ -64,6 +64,13 @@ export default function Auth() {
     return msg;
   };
 
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+    ]);
+  };
+
   const handleSubmit = async () => {
     setError("");
     setSuccess("");
@@ -74,10 +81,10 @@ export default function Auth() {
     if (mode === "login" || isAdmin) {
       if (!trimEmail || !trimPw) { setError("Please fill in all fields."); return; }
       setLoading(true);
-      const result = await login(
-        trimEmail,
-        trimPw,
-        (isAdmin ? "admin" : isScholar ? "scholar" : "student") as "student" | "scholar" | "admin",
+      const result = await withTimeout(
+        login(trimEmail, trimPw, (isAdmin ? "admin" : isScholar ? "scholar" : "student") as "student" | "scholar" | "admin"),
+        15000,
+        { success: false, error: "Request timed out. Check your connection and try again." },
       );
       setLoading(false);
       if (result.success) {
@@ -93,13 +100,17 @@ export default function Auth() {
       if (!agreed) { setError("Please agree to the Terms & Privacy Policy."); return; }
 
       setLoading(true);
-      const result = await signup({
-        name: trimName,
-        email: trimEmail,
-        password: trimPw,
-        role: isScholar ? "scholar" : "student",
-        expertise: expertise || undefined,
-      });
+      const result = await withTimeout(
+        signup({
+          name: trimName,
+          email: trimEmail,
+          password: trimPw,
+          role: isScholar ? "scholar" : "student",
+          expertise: expertise || undefined,
+        }),
+        20000,
+        { success: false, error: "Request timed out. Check your connection and try again." },
+      );
       setLoading(false);
 
       if (result.success) {

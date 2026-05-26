@@ -280,27 +280,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const login = async (
     email: string,
     password: string,
-    loginRole: "student" | "scholar" | "admin",
+    _loginRole: "student" | "scholar" | "admin",
   ): Promise<{ success: boolean; error?: string }> => {
     setAuthLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password: password.trim(),
       });
       if (error) return { success: false, error: error.message };
-
-      if (data.user) {
-        const profile = await getProfile(data.user.id);
-        if (profile && loginRole !== "admin" && profile.role !== loginRole) {
-          await supabase.auth.signOut();
-          return {
-            success: false,
-            error: `This account is registered as a ${profile.role}, not ${loginRole}.`,
-          };
-        }
-      }
+      // Profile + role loading happens via onAuthStateChange — no extra DB call needed here
       return { success: true };
+    } catch {
+      return { success: false, error: "Network error. Check your connection." };
     } finally {
       setAuthLoading(false);
     }
