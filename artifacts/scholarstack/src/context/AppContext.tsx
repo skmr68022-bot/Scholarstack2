@@ -306,6 +306,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // on slow networks. Returning void makes setSession() resolve immediately
       // while loadUser() still runs in the background.
       if (session?.user) {
+        // Re-arm the loading flag so RequireAuth shows a spinner instead of
+        // bouncing — loading was already set false by the initial getSession()
+        // call (which found no session), so we must raise it again here.
+        setLoading(true);
         void loadUser(session.user).finally(() => setLoading(false));
       } else {
         setCurrentUser(null);
