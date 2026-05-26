@@ -386,9 +386,9 @@ export default function NoteDetail() {
           </div>
 
           {note.fileUrl ? (
-            /* Real PDF — render in iframe */
+            /* Real PDF — embed via Google Docs Viewer (avoids Supabase X-Frame-Options) */
             <iframe
-              src={note.fileUrl}
+              src={`https://docs.google.com/viewer?url=${encodeURIComponent(note.fileUrl)}&embedded=true`}
               className="flex-1 w-full border-0 bg-white"
               title={note.title}
             />
