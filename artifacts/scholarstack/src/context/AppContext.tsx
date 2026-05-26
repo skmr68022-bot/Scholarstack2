@@ -316,19 +316,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }): Promise<{ success: boolean; error?: string }> => {
     setAuthLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      // Use server-side signup to bypass email confirmation requirement
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name.trim(),
+          email: data.email.trim().toLowerCase(),
+          password: data.password.trim(),
+          role: data.role,
+          expertise: data.expertise ?? null,
+        }),
+      });
+
+      const json = (await res.json()) as { success: boolean; error?: string };
+
+      if (!json.success) {
+        // Fallback: try direct Supabase signup if server endpoint not configured
+        if (json.error?.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+          const { error: sbError } = await supabase.auth.signUp({
+            email: data.email.trim().toLowerCase(),
+            password: data.password.trim(),
+            options: {
+              data: {
+                name: data.name.trim(),
+                role: data.role,
+                expertise: data.expertise ?? null,
+              },
+            },
+          });
+          if (sbError) return { success: false, error: sbError.message };
+          return { success: true };
+        }
+        return { success: false, error: json.error };
+      }
+
+      // Account created and confirmed — now sign in to get a session
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: data.email.trim().toLowerCase(),
         password: data.password.trim(),
-        options: {
-          data: {
-            name: data.name.trim(),
-            role: data.role,
-            expertise: data.expertise ?? null,
-          },
-        },
       });
-      if (error) return { success: false, error: error.message };
+
+      if (signInError) {
+        return { success: false, error: "Account created! Please sign in with your email and password." };
+      }
+
       return { success: true };
+    } catch {
+      return { success: false, error: "Network error. Please check your connection and try again." };
     } finally {
       setAuthLoading(false);
     }
