@@ -8,6 +8,7 @@ const navItems = [
   { icon: "▣", label: "My Content", path: "/scholar/content" },
   { icon: "◎", label: "Earnings", path: "/scholar/earnings" },
   { icon: "↗", label: "Analytics", path: "/scholar/analytics" },
+  { icon: "☰", label: "Profile", path: "/scholar/profile" },
 ];
 
 export default function ScholarLayout({ children }: { children: React.ReactNode }) {

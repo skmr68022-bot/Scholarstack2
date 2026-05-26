@@ -28,6 +28,7 @@ import Upload from "./pages/scholar/Upload";
 import Content from "./pages/scholar/Content";
 import Earnings from "./pages/scholar/Earnings";
 import Analytics from "./pages/scholar/Analytics";
+import ScholarProfile from "./pages/scholar/Profile";
 
 const queryClient = new QueryClient();
 
@@ -85,6 +86,7 @@ function ScholarRoutes() {
           <Route path="/scholar/content" component={Content} />
           <Route path="/scholar/earnings" component={Earnings} />
           <Route path="/scholar/analytics" component={Analytics} />
+          <Route path="/scholar/profile" component={ScholarProfile} />
           <Route component={NotFound} />
         </Switch>
       </ScholarLayout>
