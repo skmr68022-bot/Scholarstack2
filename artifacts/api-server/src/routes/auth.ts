@@ -43,26 +43,50 @@ setInterval(() => {
 /* ── Send email via Resend ── */
 async function sendResendEmail(to: string, subject: string, html: string): Promise<boolean> {
   const apiKey = process.env["RESEND_API_KEY"];
+
   if (!apiKey) {
-    console.log(`\n╔══════════════════════════════════╗`);
-    console.log(`  EMAIL to ${to}: ${subject}`);
-    console.log(`╚══════════════════════════════════╝\n`);
+    const otpMatch = html.match(/>(\d{6})<\/div>/);
+    const otp = otpMatch?.[1];
+
+    console.log("\n==========================================");
+    console.log("LOCAL EMAIL TEST MODE");
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+
+    if (otp) {
+      console.log(`OTP CODE: ${otp}`);
+    } else {
+      console.log("No OTP found in email content.");
+    }
+
+    console.log("==========================================\n");
     return true;
   }
+
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "ScholarStack <onboarding@resend.dev>", to: [to], subject, html }),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "ScholarStack <onboarding@resend.dev>",
+        to: [to],
+        subject,
+        html,
+      }),
     });
+
     if (!res.ok) {
       const errBody = await res.text();
       console.error(`[Resend] HTTP ${res.status}: ${errBody}`);
       return false;
     }
+
     return true;
   } catch (e) {
-    console.error(`[Resend] fetch error:`, e);
+    console.error("[Resend] fetch error:", e);
     return false;
   }
 }
@@ -466,25 +490,33 @@ router.post("/auth/verify-phone-otp", async (req, res) => {
     req.log.info({ phone: normalized }, "Phone login — existing user");
 
     // Sync JWT metadata with DB profile role so the client always gets the
-    // true role (e.g. "admin") in the token, not the stale signup-time role.
-    try {
-      const { data: profileRow } = await adminClient
-        .from("profiles")
-        .select("role")
-        .eq("id", existingSession.user.id)
-        .single();
-      if (profileRow?.role && profileRow.role !== existingSession.user.user_metadata?.role) {
-        await adminClient.auth.admin.updateUserById(existingSession.user.id, {
-          user_metadata: {
-            ...existingSession.user.user_metadata,
-            role: profileRow.role,
-          },
-        });
-        req.log.info({ userId: existingSession.user.id, role: profileRow.role }, "JWT metadata synced with profile role");
-      }
-    } catch (syncErr) {
-      req.log.warn({ syncErr }, "Failed to sync JWT metadata — non-fatal");
+// true role in future tokens.
+try {
+  const userId = existingSession.user?.id;
+
+  if (userId) {
+    const { data: profileRow } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (profileRow?.role) {
+      await adminClient.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          role: profileRow.role,
+        },
+      });
+
+      req.log.info(
+        { userId, role: profileRow.role },
+        "JWT metadata synced with profile role",
+      );
     }
+  }
+} catch (syncErr) {
+  req.log.warn({ syncErr }, "Failed to sync JWT metadata — non-fatal");
+}
 
     res.json({ success: true, session: existingSession });
     return;

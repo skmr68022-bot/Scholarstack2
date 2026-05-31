@@ -66,6 +66,12 @@ export default defineConfig({
     headers: {
       "Cache-Control": "no-store",
     },
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: true,
     },
